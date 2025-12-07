@@ -43,43 +43,49 @@ US_PORTFOLIO = [
     # {'symbol': 'GLD',   'shares': 16.55, 'cost': 300.10},
     # {'symbol': 'TLT',   'shares': 224.7, 'cost': 92.22},
     # {'symbol': 'BOXX',  'shares': 100,   'cost': 110.71},
-    {'symbol': 'XLU',   'shares': 45.32, 'cost': 84.23},
+    {'symbol': 'XLU',   'shares': 250, 'cost': 42.854},
     {'symbol': 'EWT',   'shares': 100,   'cost': 61.27},
-    {'symbol': 'XLU',   'shares': 87.71, 'cost': 83.80},
+    # {'symbol': 'XLU',   'shares': 87.71, 'cost': 83.80},
     # {'symbol': 'VT',    'shares': 50,    'cost': 133.69},
 
+    {'symbol': 'PYPL',  'shares': 35,    'cost': 68.855},
+    {'symbol': 'TSM',   'shares': 32,     'cost': 284.1712},
+    {'symbol': 'SNPS',  'shares': 4,     'cost': 397.15},
+    {'symbol': 'YUM',   'shares': 1,     'cost': 141.34},
     # ===== 自選股（會顯示）=====
     {'symbol': 'UNH',   'shares': 22,    'cost': 310.86},
     {'symbol': 'GOOGL', 'shares': 73.80,    'cost': 176.454},
     {'symbol': 'NVDA',  'shares': 40.1387,    'cost': 133.039},
-    {'symbol': 'MSTR',  'shares': 10,    'cost': 399.34},
-    {'symbol': 'QCOM',  'shares': 3,     'cost': 148.51},
-    {'symbol': 'KO',    'shares': 74.47, 'cost': 68.00},
-    {'symbol': 'AEP',   'shares': 13,    'cost': 103.483},
+    {'symbol': 'MSTR',  'shares': 10,    'cost': 287.304},
+    {'symbol': 'QCOM',  'shares': 12,     'cost': 161.4525},
+    {'symbol': 'KO',    'shares': 67.47, 'cost': 67.96},
+    {'symbol': 'AEP',   'shares': 14,    'cost': 104.502},
     {'symbol': 'DUK',   'shares': 15,    'cost': 115.8626},
-    {'symbol': 'MCD',   'shares': 10,    'cost': 299.23},
-    {'symbol': 'CEG',   'shares': 5,     'cost': 330.948},
-    {'symbol': 'LEU',   'shares': 6,     'cost': 306.178},
-    {'symbol': 'PYPL',  'shares': 50,    'cost': 69.265},
-    {'symbol': 'TSM',   'shares': 2,     'cost': 227.80},
-    {'symbol': 'SNPS',  'shares': 4,     'cost': 397.15},
-    {'symbol': 'YUM',   'shares': 1,     'cost': 141.34},
-    {'symbol': 'AMZN',   'shares': 4,     'cost': 222.8075},
+    {'symbol': 'MCD',   'shares': 10,    'cost': 303.413},
+    {'symbol': 'CEG',   'shares': 7,     'cost': 341.88},
+    {'symbol': 'LEU',   'shares': 11,     'cost': 293.236},
+    {'symbol': 'AMZN',   'shares': 15,     'cost': 220.637},
     {'symbol': 'COST',   'shares': 2,     'cost': 920.255},
     {'symbol': 'ETN',   'shares': 1,     'cost': 365.12},
-    {'symbol': 'HUBB',   'shares': 3,     'cost': 421.24},
-    {'symbol': 'META',   'shares': 2,     'cost': 740.375},
-    {'symbol': 'MU',   'shares': 8,     'cost': 168.81125},
-    {'symbol': 'VST',   'shares': 1,     'cost': 204.68},
+    {'symbol': 'HUBB',   'shares': 4,     'cost': 413.425},
+    {'symbol': 'META',   'shares': 12,     'cost': 713.02},
+    # {'symbol': 'MU',   'shares': 8,     'cost': 168.81125},
+    {'symbol': 'VST',   'shares': 4,     'cost': 204.68},
+    {'symbol': 'BABA',   'shares': 2,     'cost': 169.42},
+    {'symbol': 'EOSE',   'shares':11,     'cost': 13.331},
+    {'symbol': 'FCX',   'shares': 3,     'cost': 41.6133},
+    {'symbol': 'SMR',   'shares':10,     'cost': 19.55},
 
     {'symbol': 'GIS',   'shares': 2,     'cost': 49.695},
-    {'symbol': 'IDMO',   'shares': 60,     'cost': 53.48},
+    # {'symbol': 'IDMO',   'shares': 60,     'cost': 53.48},
 
-    {'symbol': 'INTC',   'shares': 10,     'cost': 35.485},
+    {'symbol': 'INTC',   'shares': 19,     'cost': 37.003},
+    {'symbol': 'UUUU',   'shares': 30,     'cost': 16.96},
 
     {'symbol': 'TSLA',   'shares': 1.473,     'cost': 423.885},
+    {'symbol': 'VWO',   'shares': 60,     'cost': 54.74},
 
-    {'symbol': 'AVDV',   'shares': 40,     'cost':87.945},
+    # {'symbol': 'AVDV',   'shares': 40,     'cost':87.945},
 ]
 
 TW_PORTFOLIO = [
@@ -95,14 +101,14 @@ GOLD_PORTFOLIO = [
 
 # 短債部位
 SHORT_TERM_BONDS = [
-    {'symbol': 'SGOV',  'shares': 1050,  'cost': 100.402495},
+    {'symbol': 'SGOV',  'shares': 900,  'cost': 100.402495},
     {'symbol': 'BOXX',  'shares': 100,   'cost': 110.71},
 ]
 
 # 長債部位
 LONG_TERM_BONDS = [
     {'symbol': 'TLT',   'shares': 193, 'cost': 91.815},
-    {'symbol': 'IEF',   'shares': 40, 'cost': 96.665},
+    {'symbol': 'IEF',   'shares': 80, 'cost': 96.81275},
 
 ]
 
