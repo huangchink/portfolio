@@ -56,8 +56,7 @@ FULL_PORTFOLIO = [
     # {'symbol': 'MSTR',  'shares': 10,    'cost': 287.304},
     {'symbol': 'QCOM',  'shares': 12,     'cost': 161.4525},
     {'symbol': 'KO',    'shares': 67.47, 'cost': 67.96},
-    {'symbol': 'AEP',   'shares': 14,    'cost': 104.502},"0.0.0.0", port=port, debug=False)
-    
+    {'symbol': 'AEP',   'shares': 14,    'cost': 104.502},
     {'symbol': 'DUK',   'shares': 15,    'cost': 115.8626},
     {'symbol': 'MCD',   'shares': 10,    'cost': 303.413},
     {'symbol': 'CEG',   'shares': 7,     'cost': 341.88},
