@@ -1,11 +1,11 @@
-name: Deploy to GitHub Pages
+﻿name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   workflow_dispatch:
   schedule:
-    - cron: "0 2 * * *" # 每天 10:00 台北時間更新
+    - cron: "0 2 * * *" # 瘥予 10:00 ?啣????湔
 
 permissions:
   contents: read
@@ -28,7 +28,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Generate static HTML
-        run: python portfolio.py --output docs/index.html
+        run: python web.py --output docs/index.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -45,3 +45,4 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
