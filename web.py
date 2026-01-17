@@ -27,7 +27,7 @@ import yfinance as yf
 from flask import Flask, request
 from pytz import timezone
 from werkzeug.middleware.proxy_fix import ProxyFix
-
+#test
 app = Flask(__name__)
 # Trust proxy headers when running behind reverse proxies (e.g. Render)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
