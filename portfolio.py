@@ -44,10 +44,10 @@ FULL_PORTFOLIO = [
     # {'symbol': 'EWT',   'shares': 100,   'cost': 61.27},
     # {'symbol': 'XLU',   'shares': 87.71, 'cost': 83.80},
     # {'symbol': 'VT',    'shares': 50,    'cost': 133.69},
-    {"symbol": "VOO", "shares": 70.00, "cost": 506.75},
+    # {"symbol": "VOO", "shares": 70.00, "cost": 506.75},
     {"symbol": "VEA", "shares": 86.80, "cost": 53.55},
-    {"symbol": "XLU", "shares": 250, "cost": 42.854},
-    {"symbol": "EWT", "shares": 100, "cost": 61.27},
+    # {"symbol": "XLU", "shares": 250, "cost": 42.854},
+    # {"symbol": "EWT", "shares": 100, "cost": 61.27},
     # {"symbol": "PYPL", "shares": 35, "cost": 68.855},
     {"symbol": "TSM", "shares": 65, "cost": 311.863846},
     {"symbol": "SNPS", "shares": 4, "cost": 397.15},
@@ -55,7 +55,7 @@ FULL_PORTFOLIO = [
     {"symbol": "UNH", "shares": 22, "cost": 310.86},
     {"symbol": "GOOGL", "shares": 80.47318, "cost": 185.028},
     {"symbol": "NVDA", "shares": 40.1387, "cost": 133.039},
-    {"symbol": "MSTR", "shares": 10, "cost": 287.304},
+    # {"symbol": "MSTR", "shares": 10, "cost": 287.304},
     {"symbol": "QCOM", "shares": 12, "cost": 161.4525},
     
     {"symbol": "MSFT", "shares": 3, "cost": 437.97},
@@ -74,7 +74,7 @@ FULL_PORTFOLIO = [
     {"symbol": "HUBB", "shares": 4, "cost": 413.425},
     {"symbol": "FSLR", "shares": 5, "cost": 246.698},
     # {"symbol": "META", "shares": 12, "cost": 713.02},
-    {"symbol": "VST", "shares": 4, "cost": 204.68},
+    {"symbol": "VST", "shares": 14, "cost": 166.08},
     # {"symbol": "BABA", "shares": 2, "cost": 169.42},
     {"symbol": "EOSE", "shares": 54, "cost": 12.28963},
     {"symbol": "FCX", "shares": 5, "cost": 49.66},
@@ -82,8 +82,8 @@ FULL_PORTFOLIO = [
     {"symbol": "GIS", "shares": 2, "cost": 49.695},
     {"symbol": "INTC", "shares": 19, "cost": 37.003},
     {"symbol": "UUUU", "shares": 30, "cost": 16.96},
-    {"symbol": "TSLA", "shares": 1.473, "cost": 423.885},
-    {"symbol": "VWO", "shares": 60, "cost": 54.74},
+    {"symbol": "TSLA", "shares": 5.51725, "cost": 436.234},
+    # {"symbol": "VWO", "shares": 60, "cost": 54.74},
 ]
 
 
