@@ -44,7 +44,6 @@ FULL_PORTFOLIO = [
     # {'symbol': 'EWT',   'shares': 100,   'cost': 61.27},
     # {'symbol': 'XLU',   'shares': 87.71, 'cost': 83.80},
     # {'symbol': 'VT',    'shares': 50,    'cost': 133.69},
-US_PORTFOLIO = [
     {"symbol": "VOO", "shares": 70.00, "cost": 506.75},
     {"symbol": "VEA", "shares": 86.80, "cost": 53.55},
     {"symbol": "XLU", "shares": 250, "cost": 42.854},
@@ -87,7 +86,7 @@ US_PORTFOLIO = [
     {"symbol": "VWO", "shares": 60, "cost": 54.74},
 ]
 
-]
+
 
 # ================== 快取設定 ==================
 _TTL_FAST   = 60        # 1 分鐘：即時刷新
