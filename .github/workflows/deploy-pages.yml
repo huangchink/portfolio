@@ -28,7 +28,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Generate static HTML
-        run: python web.py --output docs/index.html
+        run: python portfolio.py --output docs/index.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
