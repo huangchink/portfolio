@@ -296,10 +296,16 @@ TEMPLATE = r"""<!doctype html>
             align-items: center;
         }
         
+        .table-container {
+            overflow-x: auto;
+            width: 100%;
+        }
+        
         table { 
             width:100%; 
             border-collapse: collapse; 
             margin-top: 14px; 
+            min-width: 600px;
         }
         
         th, td { 
@@ -355,26 +361,28 @@ TEMPLATE = r"""<!doctype html>
     </div>
 
     <!-- Original Table Style -->
-    <table>
-        <tr>
-            <th>代號</th>
-            <th class="right">現價</th>
-            <th class="right">成本</th>
-            <th class="right">股數</th>
-            <th class="right">市值</th>
-            <th class="right">個股報酬</th>
-        </tr>
-        {% for it in core_items %}
-        <tr>
-            <td>{{ it.symbol }}</td>
-            <td class="right">{{ it.price_str }}</td>
-            <td class="right">{{ it.cost_str }}</td>
-            <td class="right">{{ it.shares_str }}</td>
-            <td class="right">{{ it.mv_str }}</td>
-            <td class="right {% if it.profit_pct > 0 %}gain{% elif it.profit_pct < 0 %}loss{% endif %}">{{ it.profit_pct_str }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+    <div class="table-container">
+        <table>
+            <tr>
+                <th>代號</th>
+                <th class="right">現價</th>
+                <th class="right">成本</th>
+                <th class="right">股數</th>
+                <th class="right">市值</th>
+                <th class="right">個股報酬</th>
+            </tr>
+            {% for it in core_items %}
+            <tr>
+                <td>{{ it.symbol }}</td>
+                <td class="right">{{ it.price_str }}</td>
+                <td class="right">{{ it.cost_str }}</td>
+                <td class="right">{{ it.shares_str }}</td>
+                <td class="right">{{ it.mv_str }}</td>
+                <td class="right {% if it.profit_pct > 0 %}gain{% elif it.profit_pct < 0 %}loss{% endif %}">{{ it.profit_pct_str }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
 </div>
 
 <script>
