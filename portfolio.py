@@ -2,34 +2,24 @@
 """
 Usage:
   pip install -r requirements.txt
-  python portfolio.py --serve
-  python portfolio.py --output docs/index.html
+  python portfolio_chart.py --serve
+  python portfolio_chart.py --output docs/index.html
 
 Local preview: http://127.0.0.1:5000/
-
-Render (Start Command):
-  gunicorn portfolio:app --bind 0.0.0.0:$PORT --access-logfile - --error-logfile - --timeout 120 --forwarded-allow-ips='*'
 """
 
 from flask import Flask, render_template_string
 from datetime import datetime
-from werkzeug.middleware.proxy_fix import ProxyFix
-import yfinance as yf
-import pandas as pd
+import requests
+import json
 import threading, time, os, logging, argparse
 from pytz import timezone
 from pathlib import Path
 
 app = Flask(__name__)
-# Uncomment when running behind a proxy such as Render.
-# app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
-
-# Silence noisy "possibly delisted" messages from yfinance
-logging.getLogger("yfinance").setLevel(logging.ERROR)
 
 # ================== 持股設定 ==================
-# 如要排除特定 ETF，將代號放到這個集合，例如：
-# EXCLUDED_ETFS_US = {'SGOV', 'VOO'}
+# 如要排除特定 ETF，將代號放到這個集合
 EXCLUDED_ETFS_US = set()
 
 FULL_PORTFOLIO = [
@@ -45,7 +35,7 @@ FULL_PORTFOLIO = [
     # {'symbol': 'XLU',   'shares': 87.71, 'cost': 83.80},
     # {'symbol': 'VT',    'shares': 50,    'cost': 133.69},
     # {"symbol": "VOO", "shares": 70.00, "cost": 506.75},
-    {"symbol": "VEA", "shares": 86.80, "cost": 53.55},
+    # {"symbol": "VEA", "shares": 86.80, "cost": 53.55},
     # {"symbol": "XLU", "shares": 250, "cost": 42.854},
     # {"symbol": "EWT", "shares": 100, "cost": 61.27},
     # {"symbol": "PYPL", "shares": 35, "cost": 68.855},
@@ -60,7 +50,7 @@ FULL_PORTFOLIO = [
     
     {"symbol": "MSFT", "shares": 3, "cost": 437.97},
 
-    {"symbol": "MU", "shares": 41, "cost": 365.205854},
+    {"symbol": "MU", "shares": 50, "cost": 367.1426},
 
 
     {"symbol": "KO", "shares": 83.47431, "cost": 68.009},
@@ -68,7 +58,7 @@ FULL_PORTFOLIO = [
     {"symbol": "DUK", "shares": 16, "cost": 115.79375},
     {"symbol": "MCD", "shares": 10, "cost": 303.413},
     {"symbol": "CEG", "shares": 20, "cost": 328.856},
-    {"symbol": "LEU", "shares": 13, "cost": 286.554615},
+    {"symbol": "LEU", "shares": 18, "cost": 265.216},
     {"symbol": "AMZN", "shares": 18, "cost": 220.786667},
     {"symbol": "ETN", "shares": 2, "cost": 341.46},
     {"symbol": "HUBB", "shares": 4, "cost": 413.425},
@@ -108,35 +98,52 @@ def _set_cache(key, value):
     with _cache_lock:
         _cache[key] = value
 
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+}
 
-def cached_history(symbol, *, period=None, start=None, end=None, ttl=_TTL_NORMAL):
-    """抓取 yfinance history，並用 TTL 進行快取。"""
-    key = ("history", symbol, period, start, end)
-    entry = _get_cache(key)
-    now = _now()
-    if entry and (now - entry["ts"] < ttl) and entry["data"] is not None:
-        return entry["data"]
+def fetch_price_from_yahoo(symbol):
+    """
+    Directly fetch price from Yahoo Finance API to avoid yfinance library issues.
+    """
+    url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?range=1d&interval=1d"
     try:
-        tkr = yf.Ticker(symbol)
-        df = tkr.history(period=period) if period else tkr.history(start=start, end=end)
-        _set_cache(key, {"ts": now, "data": df})
-        return df
-    except Exception:
-        if entry and entry["data"] is not None:
-            return entry["data"]
-        return pd.DataFrame()
-
+        r = requests.get(url, headers=HEADERS, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            result = data.get('chart', {}).get('result')
+            if result:
+                meta = result[0].get('meta', {})
+                # Try to get regularMarketPrice, fallback to chartPreviousClose
+                price = meta.get('regularMarketPrice') or meta.get('chartPreviousClose')
+                return float(price) if price is not None else None
+    except Exception as e:
+        print(f"Error fetching {symbol}: {e}")
+    return None
 
 def cached_close(symbol, ttl=_TTL_FAST):
     """
-    取得最近收盤價，優先抓 7d，若無則抓 1mo，並套用 TTL。
+    取得最近收盤價，優先抓快取，若無則抓 Yahoo API。
     """
-    for period, t in (("7d", ttl), ("1mo", max(ttl, _TTL_NORMAL))):
-        df = cached_history(symbol, period=period, ttl=t)
-        if not df.empty and "Close" in df:
-            close = df["Close"].dropna()
-            if not close.empty:
-                return float(close.iloc[-1])
+    key = ("price", symbol)
+    entry = _get_cache(key)
+    now = _now()
+    
+    # Check cache based on TTL
+    if entry and (now - entry["ts"] < ttl) and entry["price"] is not None:
+        return entry["price"]
+        
+    # Fetch new data
+    price = fetch_price_from_yahoo(symbol)
+    
+    # Update cache (even if failed, we might cache None to avoid hammering API, but here we retry next time)
+    if price is not None:
+        _set_cache(key, {"ts": now, "price": price})
+        return price
+    elif entry and entry["price"] is not None:
+        # If fetch failed but we have old cache, return old cache even if expired
+        return entry["price"]
+        
     return "N/A"
 
 
@@ -188,6 +195,17 @@ def _build_portfolio_snapshot():
     core_total_pct = (core_total_profit / core_total_cost * 100) if core_total_cost else 0.0
 
     core_items.sort(key=lambda x: x["market_value"], reverse=True)
+    
+    # 準備圖表數據 - 前十大持股
+    top_10 = core_items[:10]
+    chart_labels = [item['symbol'] for item in top_10]
+    chart_data = [round(item['market_value'], 2) for item in top_10]
+    
+    # 計算其他
+    others_mv = sum(item['market_value'] for item in core_items[10:])
+    if others_mv > 0:
+        chart_labels.append('Others')
+        chart_data.append(round(others_mv, 2))
 
     return {
         "updated_at_tw": updated_at_tw,
@@ -196,6 +214,8 @@ def _build_portfolio_snapshot():
         "core_total_cost": core_total_cost,
         "core_total_profit": core_total_profit,
         "core_total_pct": core_total_pct,
+        "chart_labels": json.dumps(chart_labels),
+        "chart_data": json.dumps(chart_data),
     }
 
 
@@ -204,44 +224,137 @@ TEMPLATE = r"""<!doctype html>
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chink 的投資觀察清單</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: "微軟正黑體", Arial, sans-serif; background: #f4f6f8; }
-        .container { max-width: 1000px; margin: 32px auto; background: #fff; padding: 28px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
-        h1 { margin: 0 0 8px; color: #2c3e50; }
-        .meta { color: #6c757d; margin-bottom: 16px; }
-        .summary { background:#f8f9fa; padding:18px; border-radius:10px; margin:18px 0; }
-        .summary-row { display:flex; justify-content:space-between; margin:6px 0; }
-        table { width:100%; border-collapse: collapse; margin-top: 14px; }
-        th, td { border: 1px solid #eaecef; padding: 10px 12px; text-align: left; }
-        th { background: #f0f3f6; }
+        :root {
+            --primary-color: #e0e0e0;
+            --accent-color: #3498db;
+            --success-color: #4caf50;
+            --danger-color: #f44336;
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --border-color: #333333;
+        }
+        
+        body { 
+            font-family: "微軟正黑體", sans-serif; 
+            background: var(--bg-color); 
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .container { 
+            max-width: 1000px; 
+            margin: 32px auto; 
+            background: var(--card-bg); 
+            padding: 28px; 
+            border-radius: 12px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,.06); 
+        }
+        
+        h1 { 
+            margin: 0 0 8px; 
+            color: var(--primary-color);
+        }
+        
+        .meta { 
+            color: #6c757d; 
+            margin-bottom: 16px; 
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .summary-card {
+            background:#2c2c2c; 
+            padding:18px; 
+            border-radius:10px;
+            height: fit-content;
+        }
+
+        .summary-row { 
+            display: flex; 
+            justify-content: space-between; 
+            margin: 6px 0;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 250px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        table { 
+            width:100%; 
+            border-collapse: collapse; 
+            margin-top: 14px; 
+        }
+        
+        th, td { 
+            border: 1px solid var(--border-color); 
+            padding: 10px 12px; 
+            text-align: left; 
+        }
+        
+        th { 
+            background: #2c2c2c; 
+            color: #e0e0e0;
+        }
+        
         .right { text-align:right; }
-        .gain { color:#c62828; font-weight:700; }
-        .loss { color:#2e7d32; font-weight:700; }
+        .gain { color: var(--success-color); font-weight:700; }
+        .loss { color: var(--danger-color); font-weight:700; }
+        
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>Chink 的自選股概覽</h1>
+    <h1>Chink 自選股</h1>
     <div class="meta">最後更新：{{ updated_at_tw }}（台北時間）</div>
 
-    <div class="summary">
-        <div class="summary-row">
-            <span>持股總市值</span>
-            <span class="right"><b>{{ '%.2f' % core_total_mv }}</b> USD</span>
+    <div class="dashboard-grid">
+        <!-- Summary Section -->
+        <div class="summary-card">
+            <div class="summary-row">
+                <span>持股總市值</span>
+                <span class="right"><b>{{ '%.2f' % core_total_mv }}</b> USD</span>
+            </div>
+            <div class="summary-row">
+                <span>持股總成本</span>
+                <span class="right"><b>{{ '%.2f' % core_total_cost }}</b> USD</span>
+            </div>
+            <div class="summary-row">
+                <span>持股總報酬</span>
+                <span class="right {% if core_total_pct > 0 %}gain{% elif core_total_pct < 0 %}loss{% endif %}">
+                    <b>{{ '%.2f' % core_total_profit }}</b> USD（{{ '%.2f' % core_total_pct }}%）
+                </span>
+            </div>
         </div>
-        <div class="summary-row">
-            <span>持股總成本</span>
-            <span class="right"><b>{{ '%.2f' % core_total_cost }}</b> USD</span>
-        </div>
-        <div class="summary-row">
-            <span>持股總報酬</span>
-            <span class="right {% if core_total_pct > 0 %}gain{% elif core_total_pct < 0 %}loss{% endif %}">
-                <b>{{ '%.2f' % core_total_profit }}</b> USD（{{ '%.2f' % core_total_pct }}%）
-            </span>
+        
+        <!-- Chart Section -->
+        <div class="chart-container">
+            <canvas id="holdingsChart"></canvas>
         </div>
     </div>
 
+    <!-- Original Table Style -->
     <table>
         <tr>
             <th>代號</th>
@@ -263,6 +376,81 @@ TEMPLATE = r"""<!doctype html>
         {% endfor %}
     </table>
 </div>
+
+<script>
+    const ctx = document.getElementById('holdingsChart').getContext('2d');
+    const chartLabels = {{ chart_labels | safe }};
+    const chartData = {{ chart_data | safe }};
+    
+    // Generate distinct colors
+    const backgroundColors = [
+        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
+        '#FF9F40', '#E7E9ED', '#76D7C4', '#F7DC6F', '#85C1E9', '#D2B4DE'
+    ];
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: chartLabels,
+            datasets: [{
+                data: chartData,
+                backgroundColor: backgroundColors,
+                borderWidth: 1,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        color: '#e0e0e0',
+                        boxWidth: 12,
+                        font: {
+                            family: '"微軟正黑體", sans-serif',
+                            size: 11
+                        }
+                    }
+                },
+                title: {
+                    display: true,
+                    text: '前十大持股佔比',
+                    color: '#e0e0e0',
+                    font: {
+                        family: '"微軟正黑體", sans-serif',
+                        size: 14,
+                        weight: '600'
+                    },
+                    padding: {
+                        bottom: 10
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            const value = context.parsed;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1) + '%';
+                            if (context.parsed !== null) {
+                                label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+                            }
+                            return label + ' (' + percentage + ')';
+                        }
+                    }
+                }
+            },
+            layout: {
+                padding: 5
+            }
+        }
+    });
+</script>
 </body>
 </html>
 """
@@ -309,7 +497,8 @@ def main():
 
     if args.serve or not args.output:
         port = int(os.environ.get("PORT", 5000))
-        app.run(host="0.0.0.0", port=port, debug=False)
+        # use_reloader=True, reloader_type='stat' to avoid watchdog issues
+        app.run(host="0.0.0.0", port=port, debug=True, use_reloader=True, reloader_type='stat')
 
 
 if __name__ == "__main__":
