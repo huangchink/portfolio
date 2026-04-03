@@ -9,7 +9,8 @@ Local preview: http://127.0.0.1:5000/
 """
 
 from flask import Flask, render_template_string
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 import requests
 import json
 import threading, time, os, logging, argparse
@@ -63,7 +64,11 @@ def _set_cache(key, value):
         _cache[key] = value
 
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
 }
 
 def fetch_price_from_yahoo(symbol):
@@ -97,6 +102,225 @@ def cached_close(symbol, ttl=_TTL_FAST):
 
 def _build_core_rows():
     return [r for r in FULL_PORTFOLIO if r["symbol"] not in EXCLUDED_ETFS_US]
+
+
+CNN_FNG_BASE_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata/"
+
+SP500_FPE_SOURCE_URL = "https://www.multpl.com/s-p-500-pe-ratio"
+SP500_FPE_FORWARD_URL = "https://www.multpl.com/s-p-500-pe-ratio/table/by-month"
+SP500_TRAILING_URL    = "https://www.multpl.com/s-p-500-pe-ratio/table/by-month"
+
+def _parse_multpl_pe(url):
+    """
+    從 multpl.com 抓 S&P 500 P/E 表格，回傳最新兩筆 (date, value)。
+    multpl 是靜態 HTML，不需要 JS 執行，不會被反爬蟲擋。
+    """
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=15)
+        r.raise_for_status()
+        # 表格格式: <td>Apr 1, 2026</td><td>21.5</td>
+        rows = re.findall(
+            r'<tr[^>]*>\s*<td[^>]*>([^<]+)</td>\s*<td[^>]*>([^<]+)</td>\s*</tr>',
+            r.text
+        )
+        results = []
+        for date_str, val_str in rows:
+            val_str = val_str.strip().replace(",", "")
+            try:
+                results.append((date_str.strip(), float(val_str)))
+            except ValueError:
+                continue
+        return results
+    except Exception as e:
+        print(f"_parse_multpl_pe error: {e}")
+        return []
+
+
+def fetch_macromicro_sp500_forward_pe():
+    """
+    從 multpl.com 抓 S&P 500 Trailing P/E（月度）作為估值指標。
+    multpl.com 是靜態 HTML 網站，沒有 Cloudflare 反爬蟲，穩定可靠。
+    注意：這是 Trailing P/E（過去12月實際EPS），非 Forward P/E（分析師預估）。
+    Forward P/E 通常比 Trailing 低 10~20%，估值分區已做對應調整。
+    """
+    default_payload = {
+        'value': None,
+        'value_str': 'N/A',
+        'prev_value': None,
+        'prev_value_str': 'N/A',
+        'delta': None,
+        'delta_str': 'N/A',
+        'date': 'N/A',
+        'valuation': 'N/A',
+        'source_name': 'Multpl.com / S&P 500 Trailing P/E',
+        'source_url': SP500_FPE_SOURCE_URL,
+    }
+
+    try:
+        rows = _parse_multpl_pe(SP500_TRAILING_URL)
+        if len(rows) < 2:
+            print("multpl.com: 資料不足")
+            return default_payload
+
+        date_text, latest_value = rows[0]
+        _,          prev_value  = rows[1]
+        delta_value = latest_value - prev_value
+
+        # Trailing P/E 估值分區（比 Forward P/E 高，門檻相應上移）
+        if latest_value >= 28:
+            valuation = '偏貴'
+        elif latest_value >= 22:
+            valuation = '中高'
+        elif latest_value >= 18:
+            valuation = '中性'
+        else:
+            valuation = '偏便宜'
+
+        return {
+            'value': latest_value,
+            'value_str': f'{latest_value:.2f}',
+            'prev_value': prev_value,
+            'prev_value_str': f'{prev_value:.2f}',
+            'delta': delta_value,
+            'delta_str': f'{delta_value:+.2f}',
+            'date': date_text,
+            'valuation': valuation,
+            'source_name': 'Multpl.com / S&P 500 Trailing P/E',
+            'source_url': SP500_FPE_SOURCE_URL,
+        }
+    except Exception as e:
+        print(f'Error fetching S&P 500 P/E: {e}')
+        return default_payload
+
+def cached_sp500_forward_pe(ttl=_TTL_NORMAL):
+    key = ('mm_sp500_forward_pe',)
+    entry = _get_cache(key)
+    now = _now()
+    if entry and (now - entry['ts'] < ttl):
+        return entry['data']
+    data = fetch_macromicro_sp500_forward_pe()
+    _set_cache(key, {'ts': now, 'data': data})
+    return data
+
+
+def _format_fg_block(block):
+    score = block.get("score")
+    rating = block.get("rating")
+    if score is None:
+        return {"score": None, "score_str": "N/A", "rating": "N/A"}
+    score = float(score)
+    return {
+        "score": score,
+        "score_str": f"{score:.0f}",
+        "rating": rating or fear_greed_label(score),
+    }
+
+def _nearest_historical_value(chart_points, target_dt):
+    if not chart_points:
+        return None
+    best = min(chart_points, key=lambda p: abs((p["dt"] - target_dt).total_seconds()))
+    return float(best["value"]) if best.get("value") is not None else None
+
+def fear_greed_label(score):
+    """Match CNN Fear & Greed gauge buckets exactly.
+
+    0-24   : Extreme Fear
+    25-44  : Fear
+    45-55  : Neutral
+    56-74  : Greed
+    75-100 : Extreme Greed
+    """
+    if score is None:
+        return "N/A"
+    score = float(score)
+    if 0 <= score <= 24:
+        return "極度恐懼"
+    if 25 <= score <= 44:
+        return "恐懼"
+    if 45 <= score <= 55:
+        return "中性"
+    if 56 <= score <= 74:
+        return "貪婪"
+    if 75 <= score <= 100:
+        return "極度貪婪"
+    return "N/A"
+
+def fetch_cnn_fear_greed(days=370):
+    now_tw = datetime.now(timezone("Asia/Taipei"))
+    start_date = (now_tw - timedelta(days=days)).strftime("%Y-%m-%d")
+    url = f"{CNN_FNG_BASE_URL}{start_date}"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+
+        now_block = data.get("fear_and_greed", {})
+        historical = data.get("fear_and_greed_historical", {}).get("data", [])
+
+        chart_points = []
+        for point in historical:
+            ts = point.get("x")
+            val = point.get("y")
+            if ts is None or val is None:
+                continue
+            dt = datetime.fromtimestamp(int(ts) / 1000, tz=timezone("Asia/Taipei"))
+            chart_points.append({"dt": dt, "date": dt.strftime("%m/%d"), "value": float(val)})
+
+        current_value = now_block.get("score")
+        if current_value is None and chart_points:
+            current_value = chart_points[-1]["value"]
+
+        previous_close = now_block.get("previous_close")
+        if previous_close is None and len(chart_points) >= 2:
+            previous_close = chart_points[-2]["value"]
+
+        week_block = _format_fg_block(data.get("fear_and_greed_week_ago", {}))
+        month_block = _format_fg_block(data.get("fear_and_greed_month_ago", {}))
+        year_block = _format_fg_block(data.get("fear_and_greed_year_ago", {}))
+
+        if week_block["score"] is None:
+            week_score = _nearest_historical_value(chart_points, now_tw - timedelta(days=7))
+            week_block = {"score": week_score, "score_str": f"{week_score:.0f}" if week_score is not None else "N/A", "rating": fear_greed_label(week_score) if week_score is not None else "N/A"}
+        if month_block["score"] is None:
+            month_score = _nearest_historical_value(chart_points, now_tw - timedelta(days=30))
+            month_block = {"score": month_score, "score_str": f"{month_score:.0f}" if month_score is not None else "N/A", "rating": fear_greed_label(month_score) if month_score is not None else "N/A"}
+        if year_block["score"] is None:
+            year_score = _nearest_historical_value(chart_points, now_tw - timedelta(days=365))
+            year_block = {"score": year_score, "score_str": f"{year_score:.0f}" if year_score is not None else "N/A", "rating": fear_greed_label(year_score) if year_score is not None else "N/A"}
+
+        recent_chart_points = chart_points[-90:]
+
+        return {
+            "score": float(current_value) if current_value is not None else None,
+            "rating": now_block.get("rating") or fear_greed_label(float(current_value)) if current_value is not None else "N/A",
+            "previous_close": float(previous_close) if previous_close is not None else None,
+            "previous_close_rating": fear_greed_label(previous_close) if previous_close is not None else "N/A",
+            "week_ago": week_block,
+            "month_ago": month_block,
+            "year_ago": year_block,
+            "chart_labels": json.dumps([p["date"] for p in recent_chart_points], ensure_ascii=False),
+            "chart_data": json.dumps([p["value"] for p in recent_chart_points], ensure_ascii=False),
+        }
+    except Exception as e:
+        print(f"Error fetching CNN Fear & Greed Index: {e}")
+        return {
+            "score": None,
+            "rating": "N/A",
+            "previous_close": None,
+            "chart_labels": json.dumps([]),
+            "chart_data": json.dumps([]),
+        }
+
+def cached_fear_greed(ttl=_TTL_NORMAL):
+    key = ("cnn_fear_greed",)
+    entry = _get_cache(key)
+    now = _now()
+    if entry and (now - entry["ts"] < ttl):
+        return entry["data"]
+    data = fetch_cnn_fear_greed(days=90)
+    _set_cache(key, {"ts": now, "data": data})
+    return data
+
 
 def _build_portfolio_snapshot():
     updated_at_tw = datetime.now(timezone("Asia/Taipei")).strftime("%Y-%m-%d %H:%M")
@@ -148,6 +372,16 @@ def _build_portfolio_snapshot():
         chart_labels.append('Others')
         chart_data.append(round(others_mv, 2))
 
+    sp500_fpe = cached_sp500_forward_pe(ttl=_TTL_NORMAL)
+
+    fear_greed = cached_fear_greed(ttl=_TTL_NORMAL)
+    fg_score = fear_greed["score"]
+    fg_prev = fear_greed["previous_close"]
+    fg_delta = (fg_score - fg_prev) if (fg_score is not None and fg_prev is not None) else None
+    fg_week = fear_greed.get("week_ago", {"score_str": "N/A", "rating": "N/A"})
+    fg_month = fear_greed.get("month_ago", {"score_str": "N/A", "rating": "N/A"})
+    fg_year = fear_greed.get("year_ago", {"score_str": "N/A", "rating": "N/A"})
+
     # Day-of-year index for daily quote rotation
     day_of_year = datetime.now(timezone("Asia/Taipei")).timetuple().tm_yday
 
@@ -160,6 +394,29 @@ def _build_portfolio_snapshot():
         "core_total_pct": core_total_pct,
         "chart_labels": json.dumps(chart_labels),
         "chart_data": json.dumps(chart_data),
+        "fear_greed_score": fg_score,
+        "fear_greed_score_str": f"{fg_score:.0f}" if fg_score is not None else "N/A",
+        "fear_greed_rating": fear_greed["rating"],
+        "fear_greed_prev_str": f"{fg_prev:.0f}" if fg_prev is not None else "N/A",
+        "fear_greed_prev_rating": fear_greed.get("previous_close_rating", "N/A"),
+        "fear_greed_week_score_str": fg_week.get("score_str", "N/A"),
+        "fear_greed_week_rating": fg_week.get("rating", "N/A"),
+        "fear_greed_month_score_str": fg_month.get("score_str", "N/A"),
+        "fear_greed_month_rating": fg_month.get("rating", "N/A"),
+        "fear_greed_year_score_str": fg_year.get("score_str", "N/A"),
+        "fear_greed_year_rating": fg_year.get("rating", "N/A"),
+        "fear_greed_delta": fg_delta,
+        "fear_greed_delta_str": f"{fg_delta:+.0f}" if fg_delta is not None else "N/A",
+        "fear_greed_chart_labels": fear_greed["chart_labels"],
+        "fear_greed_chart_data": fear_greed["chart_data"],
+        "sp500_fpe_value_str": sp500_fpe["value_str"],
+        "sp500_fpe_prev_value_str": sp500_fpe["prev_value_str"],
+        "sp500_fpe_delta": sp500_fpe["delta"],
+        "sp500_fpe_delta_str": sp500_fpe["delta_str"],
+        "sp500_fpe_date": sp500_fpe["date"],
+        "sp500_fpe_valuation": sp500_fpe["valuation"],
+        "sp500_fpe_source_name": sp500_fpe["source_name"],
+        "sp500_fpe_source_url": sp500_fpe["source_url"],
         "day_of_year": day_of_year,
     }
 
@@ -363,6 +620,140 @@ TEMPLATE = r"""<!doctype html>
             border-radius: 4px;
             padding: 28px;
         }
+        .full-width-card {
+            max-width: 1100px;
+            margin: 24px auto 0;
+            padding: 28px 40px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+        }
+        .fear-greed-grid {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 24px;
+            align-items: stretch;
+        }
+        .fear-greed-score {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 10px;
+            padding-right: 12px;
+            border-right: 1px solid var(--border);
+        }
+        .fear-greed-snapshot-table {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .fear-greed-snapshot-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+            border-top: 1px solid rgba(255,255,255,.04);
+        }
+        .fear-greed-snapshot-row:first-child {
+            border-top: none;
+        }
+        .fear-greed-snapshot-label {
+            font-size: .75rem;
+            color: #8f8f8f;
+            margin-bottom: 2px;
+        }
+        .fear-greed-snapshot-rating {
+            font-size: .78rem;
+            color: #fff;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .fear-greed-snapshot-badge {
+            min-width: 42px;
+            height: 42px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Source Code Pro', monospace;
+            font-size: .95rem;
+            font-weight: 700;
+            color: #1f1f1f;
+            background: #e7c08d;
+            border: 1px solid rgba(201,168,76,.8);
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+        }
+        .fear-greed-value {
+            font-family: 'Source Code Pro', monospace;
+            font-size: 3rem;
+            font-weight: 600;
+            color: var(--gold-light);
+            line-height: 1;
+        }
+        .fear-greed-rating {
+            font-size: .95rem;
+            color: #fff;
+            font-weight: 600;
+        }
+        .fear-greed-meta {
+            font-size: .75rem;
+            color: var(--text-dim);
+            font-family: 'Source Code Pro', monospace;
+        }
+        .fear-greed-chart-wrap {
+            position: relative;
+            height: 260px;
+        }
+        .fear-greed-right {
+            display: grid;
+            grid-template-rows: 260px auto;
+            gap: 18px;
+        }
+        .fear-greed-gauge-wrap {
+            border-top: 1px solid rgba(255,255,255,.06);
+            padding-top: 10px;
+            min-height: 320px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .fear-greed-gauge {
+            width: 100%;
+            max-width: 680px;
+            aspect-ratio: 2 / 1.08;
+            position: relative;
+        }
+        .fear-greed-gauge svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .gauge-needle {
+            transition: transform .6s ease;
+        }
+        .gauge-number {
+            font-family: 'Source Code Pro', monospace;
+            font-size: 46px;
+            font-weight: 700;
+            fill: #1f1f1f;
+        }
+        .gauge-tick-text {
+            font-family: 'Source Code Pro', monospace;
+            font-size: 16px;
+            fill: #8a8a8a;
+        }
+        .gauge-label-text {
+            font-family: 'Noto Sans TC', sans-serif;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            fill: #6d6d6d;
+        }
+        .gauge-dot {
+            fill: #8a8a8a;
+        }
         .chart-label {
             font-size: .65rem;
             letter-spacing: 2px;
@@ -378,6 +769,70 @@ TEMPLATE = r"""<!doctype html>
             display: flex;
             align-items: center;
             justify-content: center;
+        }
+
+
+        .macro-card-grid {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            gap: 24px;
+            align-items: stretch;
+        }
+        .macro-value-panel {
+            border-right: 1px solid var(--border);
+            padding-right: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 10px;
+        }
+        .macro-value-number {
+            font-family: 'Source Code Pro', monospace;
+            font-size: 3rem;
+            line-height: 1;
+            color: var(--gold-light);
+            font-weight: 700;
+        }
+        .macro-value-label {
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        .macro-meta {
+            font-family: 'Source Code Pro', monospace;
+            font-size: .78rem;
+            color: var(--text-dim);
+        }
+        .macro-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+        }
+        .macro-detail-item {
+            background: linear-gradient(180deg, #121212, #0f0f0f);
+            border: 1px solid rgba(255,255,255,.06);
+            border-radius: 6px;
+            padding: 16px;
+            min-height: 110px;
+        }
+        .macro-detail-label {
+            font-size: .7rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+        .macro-detail-value {
+            font-family: 'Source Code Pro', monospace;
+            color: #fff;
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .macro-note {
+            margin-top: 14px;
+            font-size: .75rem;
+            color: var(--text-dim);
         }
 
         /* ── TABLE SECTION ── */
@@ -478,6 +933,12 @@ TEMPLATE = r"""<!doctype html>
             .quote-banner { padding: 0 20px; }
             .quote-card { padding: 22px 24px 22px 48px; }
             .main { padding: 0 20px; grid-template-columns: 1fr; }
+            .full-width-card { padding: 24px 20px; }
+            .fear-greed-grid { grid-template-columns: 1fr; }
+            .fear-greed-score { border-right: none; padding-right: 0; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+            .macro-card-grid { grid-template-columns: 1fr; }
+            .macro-value-panel { border-right: none; border-bottom: 1px solid var(--border); padding-right: 0; padding-bottom: 16px; }
+            .macro-detail-grid { grid-template-columns: 1fr 1fr; }
             .table-section { padding: 0 20px; }
             footer { padding: 20px 20px 0; }
         }
@@ -581,6 +1042,131 @@ TEMPLATE = r"""<!doctype html>
     </div>
 </div>
 
+<div class="full-width-card">
+    <div class="chart-label">CNN Fear & Greed Index · 市場情緒</div>
+    <div class="fear-greed-grid">
+        <div class="fear-greed-score">
+            <div class="fear-greed-snapshot-table">
+                <div class="fear-greed-snapshot-row">
+                    <div>
+                        <div class="fear-greed-snapshot-label">Previous close</div>
+                        <div class="fear-greed-snapshot-rating">{{ fear_greed_prev_rating }}</div>
+                    </div>
+                    <div class="fear-greed-snapshot-badge">{{ fear_greed_prev_str }}</div>
+                </div>
+                <div class="fear-greed-snapshot-row">
+                    <div>
+                        <div class="fear-greed-snapshot-label">1 week ago</div>
+                        <div class="fear-greed-snapshot-rating">{{ fear_greed_week_rating }}</div>
+                    </div>
+                    <div class="fear-greed-snapshot-badge">{{ fear_greed_week_score_str }}</div>
+                </div>
+                <div class="fear-greed-snapshot-row">
+                    <div>
+                        <div class="fear-greed-snapshot-label">1 month ago</div>
+                        <div class="fear-greed-snapshot-rating">{{ fear_greed_month_rating }}</div>
+                    </div>
+                    <div class="fear-greed-snapshot-badge">{{ fear_greed_month_score_str }}</div>
+                </div>
+                <div class="fear-greed-snapshot-row">
+                    <div>
+                        <div class="fear-greed-snapshot-label">1 year ago</div>
+                        <div class="fear-greed-snapshot-rating">{{ fear_greed_year_rating }}</div>
+                    </div>
+                    <div class="fear-greed-snapshot-badge">{{ fear_greed_year_score_str }}</div>
+                </div>
+            </div>
+            <div class="fear-greed-value">{{ fear_greed_score_str }}</div>
+            <div class="fear-greed-rating">{{ fear_greed_rating }}</div>
+            <div class="fear-greed-meta">前一日：{{ fear_greed_prev_str }}</div>
+            <div class="fear-greed-meta">日變動：
+                <span class="{% if fear_greed_delta is not none and fear_greed_delta > 0 %}gain-cell{% elif fear_greed_delta is not none and fear_greed_delta < 0 %}loss-cell{% endif %}">
+                    {{ fear_greed_delta_str }}
+                </span>
+            </div>
+            <div class="fear-greed-meta">區間：0–24 極度恐懼 · 25–44 恐懼 · 45–55 中性 · 56–74 貪婪 · 75–100 極度貪婪</div>
+        </div>
+        <div class="fear-greed-right">
+            <div class="fear-greed-chart-wrap">
+                <canvas id="fearGreedChart"></canvas>
+            </div>
+            <div class="fear-greed-gauge-wrap">
+                <div class="fear-greed-gauge">
+                    <svg viewBox="0 0 640 340" aria-label="CNN Fear and Greed Gauge">
+                        <path d="M38 300 A282 282 0 0 1 121.59 100.51 L175.63 154.55 A205.58 205.58 0 0 0 114.42 300 Z" fill="#eab0a8" stroke="#b11235" stroke-width="2"/>
+                        <path d="M125.83 96.42 A282 282 0 0 1 254.96 26.09 L270.57 100.48 A205.58 205.58 0 0 0 179.67 149.97 Z" fill="#e4e4e4"/>
+                        <path d="M259.83 25.09 A282 282 0 0 1 380.17 25.09 L364.56 99.48 A205.58 205.58 0 0 0 275.44 99.48 Z" fill="#dddddd"/>
+                        <path d="M385.04 26.09 A282 282 0 0 1 514.17 96.42 L460.33 149.97 A205.58 205.58 0 0 0 369.43 100.48 Z" fill="#e4e4e4"/>
+                        <path d="M518.41 100.51 A282 282 0 0 1 602 300 L525.58 300 A205.58 205.58 0 0 0 464.37 154.55 Z" fill="#e8e8e8"/>
+
+                        <path d="M114.42 300 A205.58 205.58 0 0 1 525.58 300" fill="none" stroke="#dedede" stroke-width="76" stroke-linecap="butt"/>
+
+                        <text x="175" y="92" class="gauge-label-text" transform="rotate(-33 175 92)">FEAR</text>
+                        <text x="282" y="52" class="gauge-label-text">NEUTRAL</text>
+                        <text x="422" y="92" class="gauge-label-text" transform="rotate(33 422 92)">GREED</text>
+                        <text x="70" y="246" class="gauge-label-text" transform="rotate(-63 70 246)">EXTREME</text>
+                        <text x="76" y="274" class="gauge-label-text" transform="rotate(-63 76 274)">FEAR</text>
+                        <text x="560" y="246" class="gauge-label-text" transform="rotate(63 560 246)">EXTREME</text>
+                        <text x="564" y="274" class="gauge-label-text" transform="rotate(63 564 274)">GREED</text>
+
+                        <text x="145" y="184" class="gauge-tick-text">25</text>
+                        <text x="300" y="132" class="gauge-tick-text">50</text>
+                        <text x="445" y="184" class="gauge-tick-text">75</text>
+                        <text x="112" y="297" class="gauge-tick-text">0</text>
+                        <text x="488" y="297" class="gauge-tick-text">100</text>
+
+                        <circle cx="320" cy="300" r="58" fill="#e7e7e7"/>
+                        <text id="fearGreedGaugeScore" x="320" y="294" text-anchor="middle" class="gauge-number">{{ fear_greed_score_str }}</text>
+
+                        <g id="fearGreedNeedle" class="gauge-needle">
+                            <rect x="128" y="294" width="192" height="12" fill="#1f1f1f" rx="2" ry="2"/>
+                            <path d="M128 286 L86 300 L128 314 Z" fill="#1f1f1f"/>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="full-width-card">
+    <div class="chart-label">S&amp;P 500 Forward P/E · 預估本益比</div>
+    <div class="macro-card-grid">
+        <div class="macro-value-panel">
+            <div class="macro-value-number">{{ sp500_fpe_value_str }}</div>
+            <div class="macro-value-label">{{ sp500_fpe_valuation }}</div>
+            <div class="macro-meta">資料日期：{{ sp500_fpe_date }}</div>
+            <div class="macro-meta">來源：<a href="{{ sp500_fpe_source_url }}" target="_blank" rel="noopener" style="color: var(--gold-light); text-decoration:none;">{{ sp500_fpe_source_name }}</a></div>
+        </div>
+        <div>
+            <div class="macro-detail-grid">
+                <div class="macro-detail-item">
+                    <div class="macro-detail-label">Latest</div>
+                    <div class="macro-detail-value">{{ sp500_fpe_value_str }}</div>
+                    <div class="macro-meta">目前 Forward PE</div>
+                </div>
+                <div class="macro-detail-item">
+                    <div class="macro-detail-label">Previous</div>
+                    <div class="macro-detail-value">{{ sp500_fpe_prev_value_str }}</div>
+                    <div class="macro-meta">前一次抓到的值</div>
+                </div>
+                <div class="macro-detail-item">
+                    <div class="macro-detail-label">Delta</div>
+                    <div class="macro-detail-value {% if sp500_fpe_delta is not none and sp500_fpe_delta > 0 %}gain-cell{% elif sp500_fpe_delta is not none and sp500_fpe_delta < 0 %}loss-cell{% endif %}">{{ sp500_fpe_delta_str }}</div>
+                    <div class="macro-meta">latest - previous</div>
+                </div>
+                <div class="macro-detail-item">
+                    <div class="macro-detail-label">Reading</div>
+                    <div class="macro-detail-value">{{ sp500_fpe_valuation }}</div>
+                    <div class="macro-meta">快速估值分區</div>
+                </div>
+            </div>
+            <div class="macro-note">註：這裡抓的是 MacroMicro 頁面顯示的最新 S&amp;P 500 Forward P/E。分區為頁面內部顯示用的快速判讀：&lt;16 偏便宜、16–18.99 中性、19–22.99 中高、23+ 偏貴。</div>
+        </div>
+    </div>
+</div>
+
 <!-- ── TABLE ── -->
 <div class="table-section">
     <div class="table-header">Holdings Detail · 個股明細</div>
@@ -624,6 +1210,77 @@ TEMPLATE = r"""<!doctype html>
 </footer>
 
 <script>
+const fearGreedLabels = {{ fear_greed_chart_labels | safe }};
+const fearGreedData = {{ fear_greed_chart_data | safe }};
+
+const fgCtx = document.getElementById('fearGreedChart').getContext('2d');
+new Chart(fgCtx, {
+    type: 'line',
+    data: {
+        labels: fearGreedLabels,
+        datasets: [{
+            label: 'CNN Fear & Greed',
+            data: fearGreedData,
+            borderColor: '#c9a84c',
+            backgroundColor: 'rgba(201, 168, 76, 0.12)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.25,
+            pointRadius: 0,
+            pointHoverRadius: 3
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: '#1a1a1a',
+                borderColor: '#2a2a2a',
+                borderWidth: 1,
+                titleColor: '#ffffff',
+                bodyColor: '#c9a84c'
+            }
+        },
+        scales: {
+            x: {
+                ticks: { color: '#8a8a8a', maxTicksLimit: 8 },
+                grid: { color: 'rgba(255,255,255,0.04)' }
+            },
+            y: {
+                min: 0,
+                max: 100,
+                ticks: { color: '#8a8a8a', stepSize: 25 },
+                grid: { color: 'rgba(255,255,255,0.06)' }
+            }
+        }
+    }
+});
+
+
+const fgScoreRaw = {{ fear_greed_score if fear_greed_score is not none else 'null' }};
+const fgNeedle = document.getElementById('fearGreedNeedle');
+const fgGaugeScore = document.getElementById('fearGreedGaugeScore');
+
+function clampFearGreedScore(v) {
+    if (v === null || Number.isNaN(Number(v))) return null;
+    return Math.max(0, Math.min(100, Number(v)));
+}
+
+function updateFearGreedGauge(score) {
+    const clamped = clampFearGreedScore(score);
+    if (clamped === null || !fgNeedle) return;
+    const angle = (clamped / 100) * 180;
+    fgNeedle.setAttribute('transform', `rotate(${angle} 320 300)`);
+    if (fgGaugeScore) {
+        fgGaugeScore.textContent = Math.round(clamped).toString();
+    }
+}
+
+updateFearGreedGauge(fgScoreRaw);
+
 const ctx = document.getElementById('holdingsChart').getContext('2d');
 const chartLabels = {{ chart_labels | safe }};
 const chartData   = {{ chart_data   | safe }};
