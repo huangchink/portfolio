@@ -126,10 +126,14 @@ def _parse_multpl_pe(url):
         results = []
         for date_str, val_str in rows:
             val_str = val_str.strip().replace(",", "")
-            try:
-                results.append((date_str.strip(), float(val_str)))
-            except ValueError:
-                continue
+            # Remove HTML entities like &#x2002; before finding the number
+            val_str = re.sub(r'&#[^;]+;', '', val_str)
+            num_match = re.search(r'(-?\d+(?:\.\d+)?)', val_str)
+            if num_match:
+                try:
+                    results.append((date_str.strip(), float(num_match.group(1))))
+                except ValueError:
+                    pass
         return results
     except Exception as e:
         print(f"_parse_multpl_pe error: {e}")
@@ -202,6 +206,48 @@ def cached_sp500_forward_pe(ttl=_TTL_NORMAL):
     _set_cache(key, {'ts': now, 'data': data})
     return data
 
+
+def fetch_finra_margin():
+    try:
+        url = "https://www.finra.org/investors/learn-to-invest/advanced-investing/margin-statistics"
+        r = requests.get(url, headers=HEADERS, timeout=15)
+        html = r.text
+        m = re.search(r'<tbody>(.*?)</tbody>', html, re.DOTALL)
+        if not m: return None
+        
+        rows = re.findall(r'<tr>(.*?)</tr>', m.group(1))
+        data = []
+        for row in rows:
+            tds = re.findall(r'<td>(.*?)</td>', row)
+            if len(tds) >= 2:
+                month = tds[0].strip()
+                val = int(tds[1].strip().replace(",", ""))
+                data.append((month, val))
+        
+        if len(data) >= 2:
+            mom_pct = (data[0][1] - data[1][1]) / data[1][1] * 100
+            return {
+                "latest_month": data[0][0],
+                "latest_val": data[0][1],
+                "val_str": f"{data[0][1]:,}",
+                "prev_month": data[1][0],
+                "prev_val": data[1][1],
+                "mom_pct": mom_pct,
+                "mom_str": f"{mom_pct:+.2f}%"
+            }
+    except Exception as e:
+        print("Finra margin error", e)
+    return None
+
+def cached_finra_margin(ttl=_TTL_NORMAL):
+    key = ('finra_margin',)
+    entry = _get_cache(key)
+    now = _now()
+    if entry and (now - entry['ts'] < ttl):
+        return entry['data']
+    data = fetch_finra_margin()
+    _set_cache(key, {'ts': now, 'data': data})
+    return data
 
 def _format_fg_block(block):
     score = block.get("score")
@@ -290,6 +336,12 @@ def fetch_cnn_fear_greed(days=370):
 
         recent_chart_points = chart_points[-90:]
 
+        vix_data = data.get("market_volatility_vix", {}).get("data", [])
+        latest_vix = vix_data[-1].get("y") if vix_data else None
+
+        pcr_data = data.get("put_call_options", {}).get("data", [])
+        latest_pcr = pcr_data[-1].get("y") if pcr_data else None
+
         return {
             "score": float(current_value) if current_value is not None else None,
             "rating": now_block.get("rating") or fear_greed_label(float(current_value)) if current_value is not None else "N/A",
@@ -300,6 +352,8 @@ def fetch_cnn_fear_greed(days=370):
             "year_ago": year_block,
             "chart_labels": json.dumps([p["date"] for p in recent_chart_points], ensure_ascii=False),
             "chart_data": json.dumps([p["value"] for p in recent_chart_points], ensure_ascii=False),
+            "vix": latest_vix,
+            "pcr": latest_pcr,
         }
     except Exception as e:
         print(f"Error fetching CNN Fear & Greed Index: {e}")
@@ -309,6 +363,8 @@ def fetch_cnn_fear_greed(days=370):
             "previous_close": None,
             "chart_labels": json.dumps([]),
             "chart_data": json.dumps([]),
+            "vix": None,
+            "pcr": None,
         }
 
 def cached_fear_greed(ttl=_TTL_NORMAL):
@@ -373,6 +429,7 @@ def _build_portfolio_snapshot():
         chart_data.append(round(others_mv, 2))
 
     sp500_fpe = cached_sp500_forward_pe(ttl=_TTL_NORMAL)
+    finra_margin = cached_finra_margin(ttl=_TTL_NORMAL) or {}
 
     fear_greed = cached_fear_greed(ttl=_TTL_NORMAL)
     fg_score = fear_greed["score"]
@@ -396,7 +453,7 @@ def _build_portfolio_snapshot():
         "chart_data": json.dumps(chart_data),
         "fear_greed_score": fg_score,
         "fear_greed_score_str": f"{fg_score:.0f}" if fg_score is not None else "N/A",
-        "fear_greed_rating": fear_greed["rating"],
+        "fear_greed_rating": fear_greed.get("rating", "N/A"),
         "fear_greed_prev_str": f"{fg_prev:.0f}" if fg_prev is not None else "N/A",
         "fear_greed_prev_rating": fear_greed.get("previous_close_rating", "N/A"),
         "fear_greed_week_score_str": fg_week.get("score_str", "N/A"),
@@ -407,8 +464,8 @@ def _build_portfolio_snapshot():
         "fear_greed_year_rating": fg_year.get("rating", "N/A"),
         "fear_greed_delta": fg_delta,
         "fear_greed_delta_str": f"{fg_delta:+.0f}" if fg_delta is not None else "N/A",
-        "fear_greed_chart_labels": fear_greed["chart_labels"],
-        "fear_greed_chart_data": fear_greed["chart_data"],
+        "fear_greed_chart_labels": fear_greed.get("chart_labels", "[]"),
+        "fear_greed_chart_data": fear_greed.get("chart_data", "[]"),
         "sp500_fpe_value_str": sp500_fpe["value_str"],
         "sp500_fpe_prev_value_str": sp500_fpe["prev_value_str"],
         "sp500_fpe_delta": sp500_fpe["delta"],
@@ -418,6 +475,14 @@ def _build_portfolio_snapshot():
         "sp500_fpe_source_name": sp500_fpe["source_name"],
         "sp500_fpe_source_url": sp500_fpe["source_url"],
         "day_of_year": day_of_year,
+        "finra_val_str": finra_margin.get("val_str", "N/A"),
+        "finra_month": finra_margin.get("latest_month", "N/A"),
+        "finra_mom": finra_margin.get("mom_pct"),
+        "finra_mom_str": finra_margin.get("mom_str", "N/A"),
+        "vix": fear_greed.get("vix"),
+        "vix_str": f"{fear_greed.get('vix'):.2f}" if fear_greed.get("vix") is not None else "N/A",
+        "pcr": fear_greed.get("pcr"),
+        "pcr_str": f"{fear_greed.get('pcr'):.2f}" if fear_greed.get("pcr") is not None else "N/A",
     }
 
 
@@ -1130,40 +1195,73 @@ TEMPLATE = r"""<!doctype html>
 </div>
 
 
-<div class="full-width-card">
-    <div class="chart-label">S&amp;P 500 Forward P/E · 預估本益比</div>
-    <div class="macro-card-grid">
-        <div class="macro-value-panel">
-            <div class="macro-value-number">{{ sp500_fpe_value_str }}</div>
-            <div class="macro-value-label">{{ sp500_fpe_valuation }}</div>
-            <div class="macro-meta">資料日期：{{ sp500_fpe_date }}</div>
-            <div class="macro-meta">來源：<a href="{{ sp500_fpe_source_url }}" target="_blank" rel="noopener" style="color: var(--gold-light); text-decoration:none;">{{ sp500_fpe_source_name }}</a></div>
-        </div>
+<div class="full-width-card" style="padding: 24px 40px;">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px;">
         <div>
-            <div class="macro-detail-grid">
-                <div class="macro-detail-item">
-                    <div class="macro-detail-label">Latest</div>
-                    <div class="macro-detail-value">{{ sp500_fpe_value_str }}</div>
-                    <div class="macro-meta">目前 Forward PE</div>
-                </div>
-                <div class="macro-detail-item">
-                    <div class="macro-detail-label">Previous</div>
-                    <div class="macro-detail-value">{{ sp500_fpe_prev_value_str }}</div>
-                    <div class="macro-meta">前一次抓到的值</div>
-                </div>
-                <div class="macro-detail-item">
-                    <div class="macro-detail-label">Delta</div>
-                    <div class="macro-detail-value {% if sp500_fpe_delta is not none and sp500_fpe_delta > 0 %}gain-cell{% elif sp500_fpe_delta is not none and sp500_fpe_delta < 0 %}loss-cell{% endif %}">{{ sp500_fpe_delta_str }}</div>
-                    <div class="macro-meta">latest - previous</div>
-                </div>
-                <div class="macro-detail-item">
-                    <div class="macro-detail-label">Reading</div>
-                    <div class="macro-detail-value">{{ sp500_fpe_valuation }}</div>
-                    <div class="macro-meta">快速估值分區</div>
-                </div>
-            </div>
-            <div class="macro-note">註：這裡抓的是 MacroMicro 頁面顯示的最新 S&amp;P 500 Forward P/E。分區為頁面內部顯示用的快速判讀：&lt;16 偏便宜、16–18.99 中性、19–22.99 中高、23+ 偏貴。</div>
+            <div class="chart-label" style="border: none; padding: 0; margin: 0 0 8px 0;">S&amp;P 500 Forward P/E · 預估本益比</div>
+            <div class="macro-meta">資料日期：{{ sp500_fpe_date }} · 來源：<a href="{{ sp500_fpe_source_url }}" target="_blank" rel="noopener" style="color: var(--gold-light); text-decoration:none;">{{ sp500_fpe_source_name }}</a></div>
         </div>
+        <div style="display: flex; gap: 32px; align-items: baseline;">
+            <div>
+                <span class="macro-meta">Latest: </span>
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 1.4rem; color: var(--gold-light); font-weight: 700;">{{ sp500_fpe_value_str }}</span>
+                <span class="macro-meta" style="margin-left: 4px;">({{ sp500_fpe_valuation }})</span>
+            </div>
+            <div>
+                <span class="macro-meta">Previous: </span>
+                <span style="font-family: 'Source Code Pro', monospace; font-size: 1.1rem; color: #fff;">{{ sp500_fpe_prev_value_str }}</span>
+            </div>
+            <div>
+                <span class="macro-meta">Delta: </span>
+                <span class="{% if sp500_fpe_delta is not none and sp500_fpe_delta > 0 %}gain-cell{% elif sp500_fpe_delta is not none and sp500_fpe_delta < 0 %}loss-cell{% endif %}" style="font-family: 'Source Code Pro', monospace; font-size: 1.1rem; font-weight: 600;">{{ sp500_fpe_delta_str }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="full-width-card" style="margin-top: 24px; padding: 28px 40px;">
+    <div class="chart-label">Contrarian Bottom-Fishing Signals · 抄底策略指標</div>
+    <div style="font-size: .75rem; color: var(--text-dim); margin-bottom: 24px;">
+        當市場極度恐慌、融資退場、選擇權避險情緒高漲時，往往是相對低點。本區指標皆為反向指標。
+    </div>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+        
+        <!-- FINRA Margin -->
+        <div style="background: linear-gradient(180deg, #121212, #0f0f0f); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 20px;">
+            <div style="font-size: .7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;">FINRA Margin Debt</div>
+            <div style="font-size: 1.6rem; color: #fff; font-family: 'Source Code Pro', monospace; font-weight: 700; margin-bottom: 6px;">
+                {{ finra_val_str }} <span style="font-size: 0.8rem; color: var(--text-dim); font-weight: 400;">百萬 USD</span>
+            </div>
+            <div style="font-family: 'Source Code Pro', monospace; font-size: .78rem; margin-bottom: 16px;">MoM: <span class="{% if finra_mom is not none and finra_mom > 0 %}gain-cell{% elif finra_mom is not none and finra_mom < 0 %}loss-cell{% endif %}">{{ finra_mom_str }}</span></div>
+            <div style="font-size: .75rem; color: #999; line-height: 1.6;">
+                <strong>策略含義：</strong>代表美股融資(槓桿)餘額。當市場大跌且融資餘額<b>大幅快速下降(斷頭)</b>時，代表籌碼洗淨，有利於底部形成。
+            </div>
+            <div style="font-family: 'Source Code Pro', monospace; font-size: .7rem; color: var(--text-dim); margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.04);">資料月份：{{ finra_month }}</div>
+        </div>
+
+        <!-- Cboe VIX -->
+        <div style="background: linear-gradient(180deg, #121212, #0f0f0f); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 20px;">
+            <div style="font-size: .7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;">CBOE Volatility Index (VIX)</div>
+            <div style="font-size: 1.8rem; color: {% if vix is not none and vix >= 30 %}var(--green){% else %}#fff{% endif %}; font-family: 'Source Code Pro', monospace; font-weight: 700; margin-bottom: 16px;">
+                {{ vix_str }}
+            </div>
+            <div style="font-size: .75rem; color: #999; line-height: 1.6;">
+                <strong>策略含義：</strong>衡量標普500期權的隱含波動率。VIX > 30 常為恐慌；若 VIX > 40，則歷史上極高機率為短期或中長期大底，為<b>強烈抄底訊號</b>。
+            </div>
+        </div>
+
+        <!-- Put/Call Ratio -->
+        <div style="background: linear-gradient(180deg, #121212, #0f0f0f); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 20px;">
+            <div style="font-size: .7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;">Put / Call Ratio</div>
+            <div style="font-size: 1.8rem; color: {% if pcr is not none and pcr >= 1.0 %}var(--green){% else %}#fff{% endif %}; font-family: 'Source Code Pro', monospace; font-weight: 700; margin-bottom: 16px;">
+                {{ pcr_str }}
+            </div>
+            <div style="font-size: .75rem; color: #999; line-height: 1.6;">
+                <strong>策略含義：</strong>當數值 > 1.0 (甚至 > 1.2) 時，說明整個期權市場瘋狂買保險(看跌)，極度悲觀往往是歷史回測最佳的<b>反向作多時機</b>。
+            </div>
+        </div>
+
     </div>
 </div>
 
