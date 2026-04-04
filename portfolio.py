@@ -135,6 +135,7 @@ CNN_FNG_BASE_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphda
 SP500_FPE_SOURCE_URL = "https://www.multpl.com/s-p-500-pe-ratio"
 SP500_FPE_FORWARD_URL = "https://www.multpl.com/s-p-500-pe-ratio/table/by-month"
 SP500_TRAILING_URL    = "https://www.multpl.com/s-p-500-pe-ratio/table/by-month"
+SP500_SHILLER_URL     = "https://www.multpl.com/shiller-pe/table/by-month"
 
 def _parse_multpl_pe(url):
     """
@@ -232,6 +233,58 @@ def cached_sp500_forward_pe(ttl=_TTL_NORMAL):
     _set_cache(key, {'ts': now, 'data': data})
     return data
 
+
+def fetch_shiller_pe():
+    default_payload = {
+        'value': None,
+        'value_str': 'N/A',
+        'prev_value': None,
+        'prev_value_str': 'N/A',
+        'delta': None,
+        'delta_str': 'N/A',
+        'date': 'N/A',
+        'valuation': 'N/A',
+        'source_name': 'Multpl.com / Shiller P/E',
+        'source_url': SP500_SHILLER_URL,
+    }
+    try:
+        rows = _parse_multpl_pe(SP500_SHILLER_URL)
+        if len(rows) < 2: return default_payload
+        date_text, latest_value = rows[0]
+        _, prev_value = rows[1]
+        delta_value = latest_value - prev_value
+        
+        if latest_value >= 30: valuation = '泡沫高估區'
+        elif latest_value >= 25: valuation = '偏貴'
+        elif latest_value >= 20: valuation = '中性偏高'
+        elif latest_value >= 15: valuation = '合理偏便宜'
+        else: valuation = '十年一遇歷史大底(15下)'
+        
+        return {
+            'value': latest_value,
+            'value_str': f'{latest_value:.2f}',
+            'prev_value': prev_value,
+            'prev_value_str': f'{prev_value:.2f}',
+            'delta': delta_value,
+            'delta_str': f'{delta_value:+.2f}',
+            'date': date_text,
+            'valuation': valuation,
+            'source_name': 'Multpl.com / Shiller P/E',
+            'source_url': SP500_SHILLER_URL,
+        }
+    except Exception as e:
+        print(f"Error fetching Shiller PE: {e}")
+        return default_payload
+
+def cached_shiller_pe(ttl=_TTL_NORMAL):
+    key = ('shiller_pe',)
+    entry = _get_cache(key)
+    now = _now()
+    if entry and (now - entry['ts'] < ttl):
+        return entry['data']
+    data = fetch_shiller_pe()
+    _set_cache(key, {'ts': now, 'data': data})
+    return data
 
 def fetch_finra_margin():
     try:
@@ -615,6 +668,17 @@ def _build_portfolio_snapshot():
     s_conds_met = sum([s_cond_sp500, s_cond_vix, s_cond_pcr, s_cond_finra_cont, s_cond_pe, s_cond_fg, s_cond_ma1250])
     s_class_signal = s_conds_met >= 5
 
+    # Class SS Conditions (New)
+    shiller_pe = cached_shiller_pe(ttl=_TTL_NORMAL)
+    ss_cond_sp500 = sp500_dd is not None and sp500_dd <= -30
+    ss_cond_vix = vix_val is not None and vix_val > 40
+    ss_cond_shiller = shiller_pe.get("value") is not None and shiller_pe["value"] < 20
+    ss_cond_pcr = pcr_val is not None and pcr_val > 1.2
+    ss_cond_ma1250 = sp5_b1250
+    
+    ss_conds_met = sum([ss_cond_sp500, ss_cond_vix, ss_cond_shiller, ss_cond_ma1250, ss_cond_pcr])
+    ss_class_signal = ss_conds_met >= 4
+
     # Day-of-year index for daily quote rotation
     day_of_year = datetime.now(timezone("Asia/Taipei")).timetuple().tm_yday
 
@@ -691,6 +755,17 @@ def _build_portfolio_snapshot():
         "s_conds_met": s_conds_met,
         "s_class_signal": s_class_signal,
 
+        "ss_cond_sp500": ss_cond_sp500,
+        "ss_cond_vix": ss_cond_vix,
+        "ss_cond_shiller": ss_cond_shiller,
+        "ss_cond_pcr": ss_cond_pcr,
+        "ss_cond_ma1250": s_cond_ma1250,
+        "ss_conds_met": ss_conds_met,
+        "ss_class_signal": ss_class_signal,
+        
+        "shiller_pe_value_str": shiller_pe.get("value_str", "N/A"),
+        "shiller_pe_valuation": shiller_pe.get("valuation", "N/A"),
+        
         "sp5_price": sp5_hist.get("price_str", "N/A"),
         "sp5_ma20": sp5_hist.get("ma20_str", "N/A"),
         "sp5_ma60": sp5_hist.get("ma60_str", "N/A"),
@@ -1632,6 +1707,42 @@ TEMPLATE = r"""<!doctype html>
                         S&amp;P 500 跌破五年線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if s_cond_ma1250 %}跌破{% else %}未破{% endif %})</span>
                     </li>
                 </ul>
+            </div>
+            <!-- SS 級 -->
+            <div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <div style="font-size: 1.1rem; color: #ff4d4d; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                        SS 級訊號：史詩大底
+                        {% if ss_class_signal %}
+                            <span style="background: var(--red); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">財富重分配</span>
+                        {% endif %}
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-dim);">符合條件：<span style="color: #fff; font-weight: 700;">{{ ss_conds_met }} / 5 (需滿4項)</span></div>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 12px;">信貸ALL IN / 破產或暴富</div>
+                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if ss_cond_sp500 %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_sp500 %}●{% else %}○{% endif %}</span> 
+                        S&amp;P 500 跌 30% <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_dd_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if ss_cond_vix %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_vix %}●{% else %}○{% endif %}</span> 
+                        VIX &gt; 40 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ vix_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if ss_cond_pcr %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_pcr %}●{% else %}○{% endif %}</span> 
+                        Put/Call Ratio &gt; 1.2 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ pcr_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if ss_cond_shiller %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_shiller %}●{% else %}○{% endif %}</span> 
+                        Shiller P/E &lt; 20 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ shiller_pe_value_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if ss_cond_ma1250 %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_ma1250 %}●{% else %}○{% endif %}</span> 
+                        S&amp;P 500 跌破五年線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if ss_cond_ma1250 %}跌破{% else %}未破{% endif %})</span>
+                    </li>
+                </ul>
+            </div>
         </div>
     </div>
     
@@ -1672,10 +1783,34 @@ TEMPLATE = r"""<!doctype html>
             </div>
         </div>
 
+        <!-- Shiller P/E -->
+        <div style="background: linear-gradient(180deg, #121212, #0f0f0f); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 20px;">
+            <div style="font-size: .7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;">Shiller P/E (CAPE)</div>
+            <div style="font-size: 1.8rem; color: #fff; font-family: 'Source Code Pro', monospace; font-weight: 700; margin-bottom: 6px;">
+                {{ shiller_pe_value_str }} <span style="font-size: 0.8rem; color: var(--text-dim); font-weight: 400;">({{ shiller_pe_valuation }})</span>
+            </div>
+            <div style="font-size: .75rem; color: #999; line-height: 1.6; margin-top: 16px;">
+                <strong>策略含義：</strong>席勒本益比，排除了景氣循環週期的雜訊，代表大長期的估值基準。<30為非泡沫，若 <b><20 為十年難見買點</b>。
+            </div>
+        </div>
+
     </div>
 </div>
 
-<!-- ── TABLE ── -->
+<!-- PORTFOLIO COMPOSITION -->
+<div class="table-section" style="border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 6px; padding-bottom: 20px;">
+    <div class="table-header">Portfolio Composition · 持股組成</div>
+    <div id="compositionBar" style="height:7px;border-radius:4px;overflow:hidden;display:flex;gap:1px;background:#181818;margin-bottom:14px;"></div>
+    <div id="compositionBadges" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <span style="font-size:.75rem;color:var(--text-dim);">Loading…</span>
+    </div>
+    <div style="font-size:.75rem;color:#888;line-height:1.75;">
+        <strong style="color:#bbb;">策略摘要：</strong>
+        科技成長（GOOGL、NVDA、MSFT、TSM、SNPS、AMZN、MU）為核心，搭配防禦消費（KO、MCD、YUM、DPZ、UNH）+ 公用事業（AEP、DUK）作為大跌時的護城層。清潔能源（CEG、FSLR）對應 AI 電力需求長期主題，核能（LEU）適居去碳化潮流。
+    </div>
+</div>
+
+<!-- TABLE -->
 <div class="table-section">
     <div class="table-header">Holdings Detail · 個股明細</div>
     <div class="table-wrapper">
@@ -1690,7 +1825,7 @@ TEMPLATE = r"""<!doctype html>
                     <th>報酬率</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="holdingsTbody">
                 {% for it in core_items %}
                 <tr>
                     <td title="Trailing PE: {{ it.tpe_str }}&#10;Forward PE: {{ it.fpe_str }}" style="cursor: help;">
@@ -1893,6 +2028,68 @@ new Chart(sp5Ctx, {
         }
     }
 });
+
+// Portfolio Composition Bar
+(function(){
+    const cats = {
+        'GOOGL':'\u79d1\u6280\u6210\u9577','NVDA':'\u79d1\u6280\u6210\u9577','MSFT':'\u79d1\u6280\u6210\u9577','MU':'\u79d1\u6280\u6210\u9577',
+        'SNPS':'科技成長','TSM':'科技成長','AMZN':'科技成長',
+        'KO':'防禦消費','MCD':'防禦消費','YUM':'防禦消費','DPZ':'防禦消費','AXP':'防禦消費',
+        'UNH':'醫療防禦',
+        'AEP':'電力能源','DUK':'電力能源',
+        'CEG':'電力能源','FSLR':'電力能源',
+        'LEU':'電力能源',
+        'ETN':'電力能源','HUBB':'電力能源',
+    };
+    const catColors = {
+        '科技成長':'#4f9ef8','防禦消費':'#62d96b','電力能源':'#ffd700',
+        '醫療防禦':'#b388ff','工業':'#a5a5a5',
+    };
+    const tbody = document.getElementById('holdingsTbody');
+    if(!tbody) return;
+    const rows = tbody.querySelectorAll('tr');
+    const mvByCat = {};
+    let totalMv = 0;
+    rows.forEach(tr => {
+        const tds = tr.querySelectorAll('td');
+        if(tds.length < 5) return;
+        const sym = tds[0].textContent.trim().replace(/^\d+\s*/, '');
+        const mv = parseFloat(tds[4].textContent.replace(/,/g,''));
+        if(isNaN(mv)) return;
+        const cat = cats[sym] || '\u5176\u4ed6';
+        mvByCat[cat] = (mvByCat[cat] || 0) + mv;
+        totalMv += mv;
+    });
+    if(!totalMv) return;
+    const sorted = Object.entries(mvByCat).sort((a,b)=>b[1]-a[1]);
+
+    const bar = document.getElementById('compositionBar');
+    if(bar) {
+        bar.innerHTML = '';
+        sorted.forEach(([cat, mv]) => {
+            const pct = mv/totalMv*100;
+            const color = catColors[cat]||'#888';
+            const seg = document.createElement('div');
+            seg.title = cat+': '+pct.toFixed(1)+'%';
+            seg.style.cssText = 'height:100%;width:'+pct+'%;background:'+color+';';
+            bar.appendChild(seg);
+        });
+    }
+    const badges = document.getElementById('compositionBadges');
+    if(badges) {
+        badges.innerHTML = '';
+        sorted.forEach(([cat, mv]) => {
+            const pct = (mv/totalMv*100).toFixed(1);
+            const color = catColors[cat]||'#888';
+            const b = document.createElement('div');
+            b.style.cssText = 'display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:8px 14px;';
+            b.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0;"></span>'
+                        + '<span style="font-size:.82rem;color:#ccc;">'+cat+'</span>'
+                        + '<span style="font-size:.88rem;font-family:\'Source Code Pro\',monospace;color:'+color+';font-weight:700;">'+pct+'%</span>';
+            badges.appendChild(b);
+        });
+    }
+}());
 </script>
 </body>
 </html>
