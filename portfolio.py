@@ -16,6 +16,7 @@ import json
 import threading, time, os, logging, argparse
 from pytz import timezone
 from pathlib import Path
+import yfinance as yf
 
 app = Flask(__name__)
 
@@ -24,7 +25,7 @@ EXCLUDED_ETFS_US = set()
 
 FULL_PORTFOLIO = [
     {"symbol": "TSM",   "shares": 65,        "cost": 311.863846},
-    {"symbol": "SNPS",  "shares": 4,         "cost": 397.15},
+    {"symbol": "SNPS",  "shares": 4,         "cost": 396.15},
     {"symbol": "YUM",   "shares": 1,         "cost": 141.34},
     {"symbol": "UNH",   "shares": 22,        "cost": 310.86},
     {"symbol": "GOOGL", "shares": 80.47318,  "cost": 185.028},
@@ -98,7 +99,28 @@ def cached_close(symbol, ttl=_TTL_FAST):
         return price
     elif entry and entry["price"] is not None:
         return entry["price"]
-    return "N/A"
+    return None
+
+def fetch_stock_pe(symbol):
+    try:
+        info = yf.Ticker(symbol).info
+        return {
+            "trailingPE": info.get("trailingPE"),
+            "forwardPE": info.get("forwardPE")
+        }
+    except Exception as e:
+        print(f"Error fetching PE for {symbol}: {e}")
+        return {"trailingPE": None, "forwardPE": None}
+
+def cached_stock_pe(symbol, ttl=3600):
+    key = ("pe", symbol)
+    entry = _get_cache(key)
+    now = _now()
+    if entry and (now - entry["ts"] < ttl):
+        return entry["data"]
+    data = fetch_stock_pe(symbol)
+    _set_cache(key, {"ts": now, "data": data})
+    return data
 
 def _build_core_rows():
     return [r for r in FULL_PORTFOLIO if r["symbol"] not in EXCLUDED_ETFS_US]
@@ -249,6 +271,104 @@ def cached_finra_margin(ttl=_TTL_NORMAL):
     _set_cache(key, {'ts': now, 'data': data})
     return data
 
+def fetch_drawdown(symbol):
+    url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?range=1y&interval=1d"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            result = data.get('chart', {}).get('result')
+            if result:
+                indicators = result[0].get('indicators', {}).get('quote', [{}])[0]
+                highs = indicators.get('high', [])
+                valid_highs = [h for h in highs if h is not None]
+                if not valid_highs: return None
+                
+                max_high = max(valid_highs)
+                meta = result[0].get('meta', {})
+                current_price = meta.get('regularMarketPrice') or meta.get('chartPreviousClose')
+                
+                if max_high and current_price:
+                    dd = (current_price - max_high) / max_high * 100
+                    return dd
+    except Exception as e:
+        print(f"Error fetching max high for {symbol}: {e}")
+    return None
+
+def cached_drawdown(symbol, ttl=_TTL_NORMAL):
+    key = ("drawdown", symbol)
+    entry = _get_cache(key)
+    now = _now()
+    if entry and (now - entry["ts"] < ttl) and entry["dd"] is not None:
+        return entry["dd"]
+    dd = fetch_drawdown(symbol)
+    if dd is not None:
+        _set_cache(key, {"ts": now, "dd": dd})
+        return dd
+    elif entry and entry["dd"] is not None:
+        return entry["dd"]
+    return None
+
+def fetch_sp500_historical():
+    url = f"https://query2.finance.yahoo.com/v8/finance/chart/^GSPC?range=5y&interval=1d"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=15)
+        if r.status_code == 200:
+            data = r.json()
+            result = data.get('chart', {}).get('result', [])
+            if result:
+                timestamps = result[0].get('timestamp', [])
+                indicators = result[0].get('indicators', {}).get('quote', [{}])[0]
+                closes = indicators.get('close', [])
+                
+                valid = [(ts, c) for ts, c in zip(timestamps, closes) if c is not None]
+                if not valid: return None
+                
+                c_vals = [x[1] for x in valid]
+                curr = c_vals[-1]
+                
+                ma20 = sum(c_vals[-20:])/20 if len(c_vals) >= 20 else None
+                ma60 = sum(c_vals[-60:])/60 if len(c_vals) >= 60 else None
+                ma250 = sum(c_vals[-250:])/250 if len(c_vals) >= 250 else None
+                ma1250 = sum(c_vals[-1250:])/1250 if len(c_vals) >= 1250 else None
+                
+                chart_data = valid[-250:] # last 1 year
+                labels = [datetime.fromtimestamp(ts, tz=timezone("Asia/Taipei")).strftime("%y/%m/%d") for ts, _ in chart_data]
+                points = [round(v, 2) for _, v in chart_data]
+                
+                return {
+                    "price_str": f"{curr:.2f}",
+                    "ma20_str": f"{ma20:.2f}" if ma20 else "N/A",
+                    "ma60_str": f"{ma60:.2f}" if ma60 else "N/A",
+                    "ma250_str": f"{ma250:.2f}" if ma250 else "N/A",
+                    "ma1250_str": f"{ma1250:.2f}" if ma1250 else "N/A",
+                    "broken_20": curr < ma20 if ma20 else False,
+                    "broken_60": curr < ma60 if ma60 else False,
+                    "broken_250": curr < ma250 if ma250 else False,
+                    "broken_1250": curr < ma1250 if ma1250 else False,
+                    "chart_labels": json.dumps(labels),
+                    "chart_points": json.dumps(points)
+                }
+    except Exception as e:
+        print(f"Error fetching SP500 historical: {e}")
+    return None
+
+def cached_sp500_historical(ttl=_TTL_NORMAL):
+    key = ("sp500_hist",)
+    entry = _get_cache(key)
+    now = _now()
+    if entry and (now - entry["ts"] < ttl) and entry["data"] is not None:
+        return entry["data"]
+    data = fetch_sp500_historical()
+    if data is not None:
+        _set_cache(key, {"ts": now, "data": data})
+        return data
+    elif entry and entry["data"] is not None:
+        return entry["data"]
+    return None
+
+
+
 def _format_fg_block(block):
     score = block.get("score")
     rating = block.get("rating")
@@ -397,6 +517,10 @@ def _build_portfolio_snapshot():
             mv_str = f"{mv:.2f}"
             profit_pct_str = f"{profit_pct:.2f}%"
 
+        pe_data = cached_stock_pe(row["symbol"])
+        tpe_str = f"{pe_data['trailingPE']:.1f}" if pe_data and pe_data.get('trailingPE') else "N/A"
+        fpe_str = f"{pe_data['forwardPE']:.1f}" if pe_data and pe_data.get('forwardPE') else "N/A"
+
         core_total_mv += mv
         core_items.append({
             "symbol": row["symbol"],
@@ -438,6 +562,54 @@ def _build_portfolio_snapshot():
     fg_week = fear_greed.get("week_ago", {"score_str": "N/A", "rating": "N/A"})
     fg_month = fear_greed.get("month_ago", {"score_str": "N/A", "rating": "N/A"})
     fg_year = fear_greed.get("year_ago", {"score_str": "N/A", "rating": "N/A"})
+
+    # Fetch Drawdowns
+    sp5_hist = cached_sp500_historical(ttl=_TTL_NORMAL) or {}
+    sp500_dd = cached_drawdown("^GSPC", ttl=_TTL_NORMAL)
+
+    # Strategy Conditions
+    vix_val = fear_greed.get("vix")
+    pcr_val = fear_greed.get("pcr")
+    mom_val = finra_margin.get("mom_pct")
+
+    sp5_b60 = sp5_hist.get("broken_60", False)
+    sp5_b250 = sp5_hist.get("broken_250", False)
+    sp5_b1250 = sp5_hist.get("broken_1250", False)
+
+    # Class B Conditions (formerly A)
+    b_cond_sp500 = sp500_dd is not None and sp500_dd <= -10
+    b_cond_vix = vix_val is not None and vix_val > 30
+    b_cond_pcr = pcr_val is not None and pcr_val > 0.9
+    b_cond_finra = mom_val is not None and mom_val < 0
+    b_cond_ma60 = sp5_b60
+    b_cond_fg = fg_score is not None and fg_score < 15
+    
+    b_conds_met = sum([b_cond_sp500, b_cond_vix, b_cond_pcr, b_cond_finra, b_cond_ma60, b_cond_fg])
+    b_class_signal = b_conds_met >= 4
+
+    # Class A Conditions (formerly S)
+    a_cond_sp500 = sp500_dd is not None and sp500_dd <= -15
+    a_cond_vix = vix_val is not None and (vix_val > 35 or vix_val > 40)
+    a_cond_pcr = pcr_val is not None and pcr_val > 1.0
+    a_cond_finra_cont = mom_val is not None and mom_val < 0
+    a_cond_ma250 = sp5_b250
+    a_cond_pe = sp500_fpe.get("value") is not None and sp500_fpe["value"] < 25
+    a_cond_fg = fg_score is not None and fg_score < 10
+
+    a_conds_met = sum([a_cond_sp500, a_cond_vix, a_cond_pcr, a_cond_finra_cont, a_cond_ma250, a_cond_pe, a_cond_fg])
+    a_class_signal = a_conds_met >= 5
+    
+    # Class S Conditions (New)
+    s_cond_sp500 = sp500_dd is not None and sp500_dd <= -20
+    s_cond_vix = vix_val is not None and (vix_val > 35 or vix_val > 40)
+    s_cond_pcr = pcr_val is not None and pcr_val > 1.0
+    s_cond_finra_cont = mom_val is not None and mom_val < 0
+    s_cond_pe = sp500_fpe.get("value") is not None and sp500_fpe["value"] < 15
+    s_cond_fg = fg_score is not None and fg_score < 5
+    s_cond_ma1250 = sp5_b1250
+    
+    s_conds_met = sum([s_cond_sp500, s_cond_vix, s_cond_pcr, s_cond_finra_cont, s_cond_pe, s_cond_fg, s_cond_ma1250])
+    s_class_signal = s_conds_met >= 5
 
     # Day-of-year index for daily quote rotation
     day_of_year = datetime.now(timezone("Asia/Taipei")).timetuple().tm_yday
@@ -483,6 +655,49 @@ def _build_portfolio_snapshot():
         "vix_str": f"{fear_greed.get('vix'):.2f}" if fear_greed.get("vix") is not None else "N/A",
         "pcr": fear_greed.get("pcr"),
         "pcr_str": f"{fear_greed.get('pcr'):.2f}" if fear_greed.get("pcr") is not None else "N/A",
+        
+        # Strategy variables
+        "sp500_dd_str": f"{sp500_dd:.1f}%" if sp500_dd is not None else "N/A",
+        "b_cond_sp500": b_cond_sp500,
+        "b_cond_vix": b_cond_vix,
+        "b_cond_pcr": b_cond_pcr,
+        "b_cond_finra": b_cond_finra,
+        "b_cond_ma60": b_cond_ma60,
+        "b_cond_fg": b_cond_fg,
+        "b_conds_met": b_conds_met,
+        "b_class_signal": b_class_signal,
+        
+        "a_cond_sp500": a_cond_sp500,
+        "a_cond_vix": a_cond_vix,
+        "a_cond_pcr": a_cond_pcr,
+        "a_cond_finra_cont": a_cond_finra_cont,
+        "a_cond_ma250": a_cond_ma250,
+        "a_cond_pe": a_cond_pe,
+        "a_cond_fg": a_cond_fg,
+        "a_conds_met": a_conds_met,
+        "a_class_signal": a_class_signal,
+
+        "s_cond_sp500": s_cond_sp500,
+        "s_cond_vix": s_cond_vix,
+        "s_cond_pcr": s_cond_pcr,
+        "s_cond_finra_cont": s_cond_finra_cont,
+        "s_cond_pe": s_cond_pe,
+        "s_cond_fg": s_cond_fg,
+        "s_cond_ma1250": s_cond_ma1250,
+        "s_conds_met": s_conds_met,
+        "s_class_signal": s_class_signal,
+
+        "sp5_price": sp5_hist.get("price_str", "N/A"),
+        "sp5_ma20": sp5_hist.get("ma20_str", "N/A"),
+        "sp5_ma60": sp5_hist.get("ma60_str", "N/A"),
+        "sp5_ma250": sp5_hist.get("ma250_str", "N/A"),
+        "sp5_ma1250": sp5_hist.get("ma1250_str", "N/A"),
+        "sp5_b20": sp5_hist.get("broken_20", False),
+        "sp5_b60": sp5_hist.get("broken_60", False),
+        "sp5_b250": sp5_hist.get("broken_250", False),
+        "sp5_b1250": sp5_hist.get("broken_1250", False),
+        "sp5_chart_labels": sp5_hist.get("chart_labels", "[]"),
+        "sp5_chart_points": sp5_hist.get("chart_points", "[]"),
     }
 
 
@@ -1108,7 +1323,10 @@ TEMPLATE = r"""<!doctype html>
 </div>
 
 <div class="full-width-card">
-    <div class="chart-label">CNN Fear & Greed Index · 市場情緒</div>
+    <div class="chart-label" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>CNN Fear & Greed Index · 市場情緒</span>
+        <a href="https://edition.cnn.com/markets/fear-and-greed" target="_blank" rel="noopener" style="font-size: 0.75rem; font-weight: 500; color: var(--gold-light); text-decoration: none; padding-bottom: 2px;">Data Source ↗</a>
+    </div>
     <div class="fear-greed-grid">
         <div class="fear-greed-score">
             <div class="fear-greed-snapshot-table">
@@ -1198,7 +1416,7 @@ TEMPLATE = r"""<!doctype html>
 <div class="full-width-card" style="padding: 24px 40px;">
     <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px;">
         <div>
-            <div class="chart-label" style="border: none; padding: 0; margin: 0 0 8px 0;">S&amp;P 500 Forward P/E · 預估本益比</div>
+            <div class="chart-label" style="border: none; padding: 0; margin: 0 0 8px 0;">S&amp;P 500 Trailing P/E · 實際本益比 (近12個月)</div>
             <div class="macro-meta">資料日期：{{ sp500_fpe_date }} · 來源：<a href="{{ sp500_fpe_source_url }}" target="_blank" rel="noopener" style="color: var(--gold-light); text-decoration:none;">{{ sp500_fpe_source_name }}</a></div>
         </div>
         <div style="display: flex; gap: 32px; align-items: baseline;">
@@ -1220,9 +1438,197 @@ TEMPLATE = r"""<!doctype html>
 </div>
 
 <div class="full-width-card" style="margin-top: 24px; padding: 28px 40px;">
+    <div class="chart-label">S&amp;P 500 Technical Trend · 大盤均線技術面</div>
+    <div style="display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 40px; align-items: stretch;">
+        <div>
+            <div style="font-size: 2.2rem; color: #fff; font-family: 'Source Code Pro', monospace; font-weight: 700; line-height: 1.2;">
+                {{ sp5_price }}
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 24px;">S&P 500 Current Price</div>
+            
+            <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
+                <li style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                    <div>月線 (20MA) 
+                        {% if sp5_b20 %}
+                        <span style="color: var(--red); font-size: 0.7rem; background: var(--red-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">跌破</span>
+                        {% else %}
+                        <span style="color: var(--green); font-size: 0.7rem; background: var(--green-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">有守</span>
+                        {% endif %}
+                    </div>
+                    <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ sp5_ma20 }}</div>
+                </li>
+                <li style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                    <div>季線 (60MA) 
+                        {% if sp5_b60 %}
+                        <span style="color: var(--red); font-size: 0.7rem; background: var(--red-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">跌破</span>
+                        {% else %}
+                        <span style="color: var(--green); font-size: 0.7rem; background: var(--green-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">有守</span>
+                        {% endif %}
+                    </div>
+                    <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ sp5_ma60 }}</div>
+                </li>
+                <li style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                    <div>年線 (250MA) 
+                        {% if sp5_b250 %}
+                        <span style="color: var(--red); font-size: 0.7rem; background: var(--red-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">跌破</span>
+                        {% else %}
+                        <span style="color: var(--green); font-size: 0.7rem; background: var(--green-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">有守</span>
+                        {% endif %}
+                    </div>
+                    <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ sp5_ma250 }}</div>
+                </li>
+                <li style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                    <div>五年線 (1250MA) 
+                        {% if sp5_b1250 %}
+                        <span style="color: var(--red); font-size: 0.7rem; background: var(--red-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">跌破</span>
+                        {% else %}
+                        <span style="color: var(--green); font-size: 0.7rem; background: var(--green-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">有守</span>
+                        {% endif %}
+                    </div>
+                    <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ sp5_ma1250 }}</div>
+                </li>
+            </ul>
+        </div>
+        <div style="position: relative; min-height: 250px;">
+            <canvas id="sp500HistChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="full-width-card" style="margin-top: 24px; padding: 28px 40px;">
     <div class="chart-label">Contrarian Bottom-Fishing Signals · 抄底策略指標</div>
     <div style="font-size: .75rem; color: var(--text-dim); margin-bottom: 24px;">
         當市場極度恐慌、融資退場、選擇權避險情緒高漲時，往往是相對低點。本區指標皆為反向指標。
+    </div>
+
+    <!-- 抄底訊號判定區域 -->
+    <div style="margin-bottom: 24px; padding: 20px; background: linear-gradient(135deg, rgba(201,168,76,0.05), rgba(0,0,0,0)); border: 1px solid rgba(201,168,76,0.3); border-radius: 6px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+            <!-- B 級 -->
+            <div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <div style="font-size: 1.1rem; color: var(--gold-light); font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                        B 級訊號：開始分批抄底
+                        {% if b_class_signal %}
+                            <span style="background: var(--green); color: #000; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">達成</span>
+                        {% endif %}
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-dim);">符合條件：<span style="color: #fff; font-weight: 700;">{{ b_conds_met }} / 6 (需滿4項)</span></div>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 12px;">先打 10%~20% 現金</div>
+                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if b_cond_sp500 %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_sp500 %}●{% else %}○{% endif %}</span> 
+                        S&amp;P 500 距前高跌 10% 以上 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_dd_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if b_cond_vix %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_vix %}●{% else %}○{% endif %}</span> 
+                        VIX &gt; 30 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ vix_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if b_cond_pcr %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_pcr %}●{% else %}○{% endif %}</span> 
+                        Put/Call Ratio &gt; 0.9 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ pcr_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if b_cond_finra %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_finra %}●{% else %}○{% endif %}</span> 
+                        FINRA 融資餘額轉弱 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ finra_mom_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if b_cond_fg %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_fg %}●{% else %}○{% endif %}</span> 
+                        CNN Fear &amp; Greed &lt; 15 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ fear_greed_score_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if b_cond_ma60 %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_ma60 %}●{% else %}○{% endif %}</span> 
+                        S&amp;P 500 跌破季線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if b_cond_ma60 %}跌破{% else %}未破{% endif %})</span>
+                    </li>
+                </ul>
+            </div>
+            <!-- A 級 -->
+            <div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <div style="font-size: 1.1rem; color: var(--gold-light); font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                        A 級訊號：可以大量抄底
+                        {% if a_class_signal %}
+                            <span style="background: var(--green); color: #000; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">達成</span>
+                        {% endif %}
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-dim);">符合條件：<span style="color: #fff; font-weight: 700;">{{ a_conds_met }} / 7 (需滿5項)</span></div>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 12px;">先打 20%~40% 現金</div>
+                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if a_cond_sp500 %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_sp500 %}●{% else %}○{% endif %}</span> 
+                        S&amp;P 500 跌 15%~20% <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_dd_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if a_cond_vix %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_vix %}●{% else %}○{% endif %}</span> 
+                        VIX &gt; 35 或 40 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ vix_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if a_cond_pcr %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_pcr %}●{% else %}○{% endif %}</span> 
+                        Put/Call Ratio &gt; 1.0 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ pcr_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if a_cond_finra_cont %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_finra_cont %}●{% else %}○{% endif %}</span> 
+                        FINRA 融資餘額連續下滑 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ finra_mom_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if a_cond_pe %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_pe %}●{% else %}○{% endif %}</span> 
+                        S&amp;P 500 Trailing P/E &lt; 25 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_fpe_value_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if a_cond_fg %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_fg %}●{% else %}○{% endif %}</span> 
+                        CNN Fear &amp; Greed &lt; 10 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ fear_greed_score_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if a_cond_ma250 %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_ma250 %}●{% else %}○{% endif %}</span> 
+                        S&amp;P 500 跌破年線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if a_cond_ma250 %}跌破{% else %}未破{% endif %})</span>
+                    </li>
+                </ul>
+            </div>
+            <!-- S 級 -->
+            <div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <div style="font-size: 1.1rem; color: var(--gold-light); font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                        S 級訊號：極端底部
+                        {% if s_class_signal %}
+                            <span style="background: var(--green); color: #000; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">強烈達成</span>
+                        {% endif %}
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-dim);">符合條件：<span style="color: #fff; font-weight: 700;">{{ s_conds_met }} / 7 (需滿5項)</span></div>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 12px;">全面建倉 / 重壓</div>
+                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if s_cond_sp500 %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_sp500 %}●{% else %}○{% endif %}</span> 
+                        S&amp;P 500 跌 20% <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_dd_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if s_cond_vix %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_vix %}●{% else %}○{% endif %}</span> 
+                        VIX &gt; 35 或 40 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ vix_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if s_cond_pcr %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_pcr %}●{% else %}○{% endif %}</span> 
+                        Put/Call Ratio &gt; 1.0 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ pcr_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if s_cond_finra_cont %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_finra_cont %}●{% else %}○{% endif %}</span> 
+                        FINRA 融資餘額連續下滑 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ finra_mom_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if s_cond_pe %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_pe %}●{% else %}○{% endif %}</span> 
+                        S&amp;P 500 Trailing P/E &lt; 15 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_fpe_value_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if s_cond_fg %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_fg %}●{% else %}○{% endif %}</span> 
+                        CNN Fear &amp; Greed &lt; 5 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ fear_greed_score_str }})</span>
+                    </li>
+                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: {% if s_cond_ma1250 %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_ma1250 %}●{% else %}○{% endif %}</span> 
+                        S&amp;P 500 跌破五年線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if s_cond_ma1250 %}跌破{% else %}未破{% endif %})</span>
+                    </li>
+                </ul>
+        </div>
     </div>
     
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
@@ -1283,7 +1689,7 @@ TEMPLATE = r"""<!doctype html>
             <tbody>
                 {% for it in core_items %}
                 <tr>
-                    <td>
+                    <td title="Trailing PE: {{ it.tpe_str }}&#10;Forward PE: {{ it.fpe_str }}" style="cursor: help;">
                         <span class="rank {% if loop.index <= 3 %}top{% endif %}">{{ loop.index }}</span>
                         {{ it.symbol }}
                     </td>
@@ -1430,6 +1836,55 @@ new Chart(ctx, {
                         return ` ${fmt.format(value)}  (${pct}%)`;
                     }
                 }
+            }
+        }
+    }
+});
+</script>
+
+<script>
+const sp5Labels = {{ sp5_chart_labels | safe }};
+const sp5Data = {{ sp5_chart_points | safe }};
+const sp5Ctx = document.getElementById('sp500HistChart').getContext('2d');
+
+new Chart(sp5Ctx, {
+    type: 'line',
+    data: {
+        labels: sp5Labels,
+        datasets: [{
+            label: 'S&P 500 (1Y)',
+            data: sp5Data,
+            borderColor: '#3ddc84',
+            backgroundColor: 'rgba(61, 220, 132, 0.08)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.1,
+            pointRadius: 0,
+            pointHoverRadius: 4
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: '#1a1a1a',
+                borderColor: '#2a2a2a',
+                borderWidth: 1,
+                titleColor: '#ffffff',
+                bodyColor: '#3ddc84'
+            }
+        },
+        scales: {
+            x: {
+                ticks: { color: '#8a8a8a', maxTicksLimit: 6 },
+                grid: { color: 'rgba(255,255,255,0.04)' }
+            },
+            y: {
+                ticks: { color: '#8a8a8a' },
+                grid: { color: 'rgba(255,255,255,0.06)' }
             }
         }
     }
