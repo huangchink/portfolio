@@ -45,7 +45,7 @@ FULL_PORTFOLIO = [
     {"symbol": "AMZN",  "shares": 18,        "cost": 220.786667},
     {"symbol": "ETN",   "shares": 2,         "cost": 341.46},
     {"symbol": "HUBB",  "shares": 4,         "cost": 413.425},
-    # {"symbol": "FSLR",  "shares": 5,         "cost": 246.698},
+    {"symbol": "FSLR",  "shares": 10,         "cost": 221.928},
     # {"symbol": "VST",   "shares": 14,        "cost": 166.08},
     # {"symbol": "TSLA",  "shares": 5.51725,   "cost": 436.234},
 
