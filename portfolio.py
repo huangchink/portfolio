@@ -29,22 +29,26 @@ FULL_PORTFOLIO = [
     {"symbol": "YUM",   "shares": 1,         "cost": 141.34},
     {"symbol": "UNH",   "shares": 22,        "cost": 310.86},
     {"symbol": "GOOGL", "shares": 80.47318,  "cost": 185.028},
-    {"symbol": "NVDA",  "shares": 40.1387,   "cost": 133.039},
-    {"symbol": "QCOM",  "shares": 12,        "cost": 161.4525},
-    {"symbol": "MSFT",  "shares": 3,         "cost": 437.97},
+    {"symbol": "NVDA",  "shares": 48.22095,   "cost": 140.098},
+    # {"symbol": "QCOM",  "shares": 12,        "cost": 161.4525},
+    {"symbol": "MSFT",  "shares": 5,         "cost": 415.454},
     {"symbol": "MU",    "shares": 50,        "cost": 367.1426},
     {"symbol": "KO",    "shares": 83.47431,  "cost": 68.009},
     {"symbol": "AEP",   "shares": 15,        "cost": 105.216},
     {"symbol": "DUK",   "shares": 16,        "cost": 115.79375},
+        {"symbol": "DPZ",   "shares": 2,        "cost": 368.735},
+    {"symbol": "AXP",   "shares": 5,        "cost": 300.21},
+
     {"symbol": "MCD",   "shares": 10,        "cost": 303.413},
-    {"symbol": "CEG",   "shares": 22,        "cost": 323.954},
+    {"symbol": "CEG",   "shares": 23,        "cost": 321.596},
     {"symbol": "LEU",   "shares": 18,        "cost": 265.216},
     {"symbol": "AMZN",  "shares": 18,        "cost": 220.786667},
     {"symbol": "ETN",   "shares": 2,         "cost": 341.46},
     {"symbol": "HUBB",  "shares": 4,         "cost": 413.425},
-    {"symbol": "FSLR",  "shares": 5,         "cost": 246.698},
-    {"symbol": "VST",   "shares": 14,        "cost": 166.08},
-    {"symbol": "TSLA",  "shares": 5.51725,   "cost": 436.234},
+    # {"symbol": "FSLR",  "shares": 5,         "cost": 246.698},
+    # {"symbol": "VST",   "shares": 14,        "cost": 166.08},
+    # {"symbol": "TSLA",  "shares": 5.51725,   "cost": 436.234},
+
 ]
 
 # ================== 快取設定 ==================
