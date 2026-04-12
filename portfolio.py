@@ -17,6 +17,8 @@ import threading, time, os, logging, argparse
 from pytz import timezone
 from pathlib import Path
 import yfinance as yf
+import pandas as pd
+import numpy as np
 
 app = Flask(__name__)
 
@@ -382,6 +384,66 @@ def cached_stock_technicals(symbol, ttl=_TTL_NORMAL):
         return entry["data"]
     return None
 
+def fetch_portfolio_metrics(core_rows):
+    try:
+        symbols = [r["symbol"] for r in core_rows]
+        if not symbols: return None
+        tickers = symbols + ["^GSPC"]
+        data = yf.download(tickers, period="ytd", interval="1d", progress=False)["Close"]
+        
+        data = data.ffill().bfill()
+        sp500_returns = data["^GSPC"].pct_change().dropna()
+        
+        port_val = pd.Series(0.0, index=data.index)
+        for r in core_rows:
+            sym = r["symbol"]
+            shares = r["shares"]
+            if sym in data.columns:
+                port_val += data[sym] * shares
+                
+        port_returns = port_val.pct_change().dropna()
+        aligned = pd.concat([port_returns, sp500_returns], axis=1).dropna()
+        p_ret = aligned.iloc[:, 0]
+        s_ret = aligned.iloc[:, 1]
+        
+        rf = 0.04 / 252 # Assumed 4% annual risk-free rate
+        excess_returns = p_ret - rf
+        std_dev = excess_returns.std()
+        sharpe_ratio = 0 if std_dev == 0 else np.sqrt(252) * excess_returns.mean() / std_dev
+            
+        cov_matrix = np.cov(p_ret, s_ret)
+        beta = cov_matrix[0, 1] / cov_matrix[1, 1] if cov_matrix[1, 1] != 0 else 1
+        
+        ann_port_return = (p_ret + 1).prod() - 1
+        ann_sp500_return = (s_ret + 1).prod() - 1
+        ytd_rf = (0.04 / 252) * len(p_ret)
+        alpha = ann_port_return - (ytd_rf + beta * (ann_sp500_return - ytd_rf))
+        
+        return {
+            "sharpe_str": f"{sharpe_ratio:.2f}",
+            "beta_str": f"{beta:.2f}",
+            "alpha_str": f"{alpha:.4f}",
+            "sp500_ytd_ret_str": f"{ann_sp500_return * 100:.2f}%",
+            "port_ytd_ret_str": f"{ann_port_return * 100:.2f}%"
+        }
+    except Exception as e:
+        print(f"Error calculating portfolio metrics: {e}")
+        return None
+
+def cached_portfolio_metrics(core_rows, ttl=3600):
+    key = ("port_metrics",)
+    entry = _get_cache(key)
+    now = _now()
+    if entry and (now - entry["ts"] < ttl) and entry["data"] is not None:
+        return entry["data"]
+    data = fetch_portfolio_metrics(core_rows)
+    if data is not None:
+        _set_cache(key, {"ts": now, "data": data})
+        return data
+    elif entry and entry["data"] is not None:
+        return entry["data"]
+    return {"sharpe_str": "N/A", "beta_str": "N/A", "alpha_str": "N/A", "sp500_ytd_ret_str": "N/A", "port_ytd_ret_str": "N/A"}
+
 def fetch_sp500_historical():
     url = f"https://query2.finance.yahoo.com/v8/finance/chart/^GSPC?range=5y&interval=1d"
     try:
@@ -626,6 +688,8 @@ def _build_portfolio_snapshot():
     core_total_profit = sum(it["profit"] for it in core_items)
     core_total_pct = (core_total_profit / core_total_cost * 100) if core_total_cost else 0.0
 
+    port_metrics = cached_portfolio_metrics(core_rows)
+
     core_items.sort(key=lambda x: x["market_value"], reverse=True)
 
     top_10 = core_items[:10]
@@ -636,6 +700,13 @@ def _build_portfolio_snapshot():
     if others_mv > 0:
         chart_labels.append('Others')
         chart_data.append(round(others_mv, 2))
+
+    chart_logos = []
+    for label in chart_labels:
+        if label == 'Others':
+            chart_logos.append("")
+        else:
+            chart_logos.append(f"https://assets.parqet.com/logos/symbol/{label}?format=png")
 
     sp500_fpe = cached_sp500_forward_pe(ttl=_TTL_NORMAL)
     finra_margin = cached_finra_margin(ttl=_TTL_NORMAL) or {}
@@ -750,8 +821,14 @@ def _build_portfolio_snapshot():
         "core_total_cost": core_total_cost,
         "core_total_profit": core_total_profit,
         "core_total_pct": core_total_pct,
+        "port_sharpe": port_metrics["sharpe_str"],
+        "port_beta": port_metrics["beta_str"],
+        "port_alpha": port_metrics["alpha_str"],
+        "port_sp500_ret": port_metrics["sp500_ytd_ret_str"],
+        "port_ytd_ret": port_metrics["port_ytd_ret_str"],
         "chart_labels": json.dumps(chart_labels),
         "chart_data": json.dumps(chart_data),
+        "chart_logos": json.dumps(chart_logos),
         "fear_greed_score": fg_score,
         "fear_greed_score_str": f"{fg_score:.0f}" if fg_score is not None else "N/A",
         "fear_greed_rating": fear_greed.get("rating", "N/A"),
@@ -1186,7 +1263,8 @@ TEMPLATE = r"""<!doctype html>
         }
         .chart-inner {
             position: relative;
-            height: 260px;
+            height: 480px;
+            margin-top: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1450,6 +1528,56 @@ TEMPLATE = r"""<!doctype html>
                 <div class="stat-value {% if core_total_pct > 0 %}gain{% elif core_total_pct < 0 %}loss{% endif %}">
                     {% if core_total_pct >= 0 %}+{% endif %}{{ '%.2f' % core_total_pct }}%
                 </div>
+            </div>
+        </div>
+
+        <div class="stat-row">
+            <div>
+                <div class="stat-name" title="投資組合今年以來（從年初至今）的實際累積報酬率" style="cursor: help; border-bottom: 1px dotted var(--text-dim); display: inline-block;">持倉 YTD 報酬</div>
+            </div>
+            <div style="text-align:right">
+                <div class="stat-value {% if port_ytd_ret != 'N/A' and '-' not in port_ytd_ret %}gain{% elif port_ytd_ret != 'N/A' %}loss{% endif %}">{{ port_ytd_ret }}</div>
+                <div class="stat-sub">Portfolio (YTD)</div>
+            </div>
+        </div>
+
+        <div class="stat-row">
+            <div>
+                <div class="stat-name" title="S&amp;P 500 今年以來（從年初至今）的實際累積報酬率" style="cursor: help; border-bottom: 1px dotted var(--text-dim); display: inline-block;">大盤 YTD 報酬</div>
+            </div>
+            <div style="text-align:right">
+                <div class="stat-value {% if port_sp500_ret != 'N/A' and '-' not in port_sp500_ret %}gain{% elif port_sp500_ret != 'N/A' %}loss{% endif %}">{{ port_sp500_ret }}</div>
+                <div class="stat-sub">S&amp;P 500 (YTD)</div>
+            </div>
+        </div>
+
+        <div class="stat-row">
+            <div>
+                <div class="stat-name" title="Sharpe Ratio = (預期報酬率 - 無風險利率估值) / 投資組合標準差 (每日變動值年化)" style="cursor: help; border-bottom: 1px dotted var(--text-dim); display: inline-block;">Sharpe Ratio</div>
+            </div>
+            <div style="text-align:right">
+                <div class="stat-value">{{ port_sharpe }}</div>
+                <div class="stat-sub">YTD Daily</div>
+            </div>
+        </div>
+
+        <div class="stat-row">
+            <div>
+                <div class="stat-name" title="Beta = Cov(投資組合報酬, 大盤報酬) / Var(大盤報酬)" style="cursor: help; border-bottom: 1px dotted var(--text-dim); display: inline-block;">Beta</div>
+            </div>
+            <div style="text-align:right">
+                <div class="stat-value">{{ port_beta }}</div>
+                <div class="stat-sub">vs S&amp;P 500</div>
+            </div>
+        </div>
+
+        <div class="stat-row">
+            <div>
+                <div class="stat-name" title="Alpha = 投資組合實際 YTD 報酬 - [無風險基準 + Beta × (大盤 YTD 報酬 - 無風險基準)]" style="cursor: help; border-bottom: 1px dotted var(--text-dim); display: inline-block;">Alpha</div>
+            </div>
+            <div style="text-align:right">
+                <div class="stat-value {% if port_alpha != 'N/A' and '-' not in port_alpha %}gain{% elif port_alpha != 'N/A' %}loss{% endif %}">{{ port_alpha }}</div>
+                <div class="stat-sub">YTD</div>
             </div>
         </div>
     </div>
@@ -2075,14 +2203,59 @@ updateFearGreedGauge(fgScoreRaw);
 const ctx = document.getElementById('holdingsChart').getContext('2d');
 const chartLabels = {{ chart_labels | safe }};
 const chartData   = {{ chart_data   | safe }};
+const chartLogos  = {{ chart_logos  | safe }};
 
 const GOLD_PALETTE = [
     '#4e9af1','#f16b4e','#4ecf8a','#b06cf7','#f7c24e',
     '#4ec8f7','#f74e8e','#7ecf4e','#f74e4e','#4e6ff7','#f7934e'
 ];
 
-new Chart(ctx, {
+let chartObj = null;
+const logoImages = {};
+chartLogos.forEach((src, idx) => {
+    if (src) {
+        let img = new Image();
+        img.src = src;
+        img.onload = () => {
+            if (chartObj) chartObj.update();
+        };
+        logoImages[idx] = img;
+    }
+});
+
+const logoPlugin = {
+    id: 'logoPlugin',
+    afterDatasetDraw(chart, args, options) {
+        const { ctx } = chart;
+        const meta = chart.getDatasetMeta(0);
+        meta.data.forEach((element, index) => {
+            const img = logoImages[index];
+            if (img && img.complete && img.naturalWidth !== 0) {
+                const centerPoint = element.tooltipPosition();
+                const x = centerPoint.x;
+                const y = centerPoint.y;
+                const size = 36;
+                // Draw subtle white background circle for contrast
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(x, y, size/2 + 1, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.fill();
+                ctx.closePath();
+                // Draw logo
+                ctx.beginPath();
+                ctx.arc(x, y, size/2, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.drawImage(img, x - size/2, y - size/2, size, size);
+                ctx.restore();
+            }
+        });
+    }
+};
+
+chartObj = new Chart(ctx, {
     type: 'doughnut',
+    plugins: [logoPlugin],
     data: {
         labels: chartLabels,
         datasets: [{
@@ -2099,7 +2272,7 @@ new Chart(ctx, {
         cutout: '62%',
         plugins: {
             legend: {
-                position: 'right',
+                position: 'bottom',
                 labels: {
                     color: '#9a9a9a',
                     boxWidth: 10,
