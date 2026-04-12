@@ -51,6 +51,10 @@ FULL_PORTFOLIO = [
 
 ]
 
+WATCHLIST = [
+    "AAPL", "META","DIS", "AMD", "COST", "GEV","VRT","JNJ"
+]
+
 # ================== 快取設定 ==================
 _TTL_FAST   = 60
 _TTL_NORMAL = 300
@@ -328,7 +332,7 @@ def cached_finra_margin(ttl=_TTL_NORMAL):
     _set_cache(key, {'ts': now, 'data': data})
     return data
 
-def fetch_drawdown(symbol):
+def fetch_stock_technicals(symbol):
     url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?range=1y&interval=1d"
     try:
         r = requests.get(url, headers=HEADERS, timeout=10)
@@ -338,32 +342,44 @@ def fetch_drawdown(symbol):
             if result:
                 indicators = result[0].get('indicators', {}).get('quote', [{}])[0]
                 highs = indicators.get('high', [])
+                closes = indicators.get('close', [])
                 valid_highs = [h for h in highs if h is not None]
-                if not valid_highs: return None
+                valid_closes = [c for c in closes if c is not None]
+                if not valid_highs or not valid_closes: return None
                 
                 max_high = max(valid_highs)
                 meta = result[0].get('meta', {})
                 current_price = meta.get('regularMarketPrice') or meta.get('chartPreviousClose')
                 
+                dd = None
                 if max_high and current_price:
                     dd = (current_price - max_high) / max_high * 100
-                    return dd
+                
+                ma60 = sum(valid_closes[-60:])/60 if len(valid_closes) >= 60 else None
+                ma250 = sum(valid_closes[-250:])/len(valid_closes) if len(valid_closes) >= 200 else None
+                
+                return {
+                    "dd": dd,
+                    "ma60": ma60,
+                    "ma250": ma250,
+                    "price": current_price
+                }
     except Exception as e:
-        print(f"Error fetching max high for {symbol}: {e}")
+        print(f"Error fetching technicals for {symbol}: {e}")
     return None
 
-def cached_drawdown(symbol, ttl=_TTL_NORMAL):
-    key = ("drawdown", symbol)
+def cached_stock_technicals(symbol, ttl=_TTL_NORMAL):
+    key = ("technicals", symbol)
     entry = _get_cache(key)
     now = _now()
-    if entry and (now - entry["ts"] < ttl) and entry["dd"] is not None:
-        return entry["dd"]
-    dd = fetch_drawdown(symbol)
-    if dd is not None:
-        _set_cache(key, {"ts": now, "dd": dd})
-        return dd
-    elif entry and entry["dd"] is not None:
-        return entry["dd"]
+    if entry and (now - entry["ts"] < ttl) and entry["data"] is not None:
+        return entry["data"]
+    data = fetch_stock_technicals(symbol)
+    if data is not None:
+        _set_cache(key, {"ts": now, "data": data})
+        return data
+    elif entry and entry["data"] is not None:
+        return entry["data"]
     return None
 
 def fetch_sp500_historical():
@@ -579,6 +595,12 @@ def _build_portfolio_snapshot():
         fpe_str = f"{pe_data['forwardPE']:.1f}" if pe_data and pe_data.get('forwardPE') else "N/A"
 
         core_total_mv += mv
+        tech = cached_stock_technicals(row["symbol"], ttl=_TTL_NORMAL) or {}
+        ma60 = tech.get("ma60")
+        ma250 = tech.get("ma250")
+        bias_60 = ((price - ma60) / ma60 * 100) if price and ma60 else None
+        broken_250 = (price < ma250) if price and ma250 else False
+
         core_items.append({
             "symbol": row["symbol"],
             "price": price,
@@ -592,6 +614,12 @@ def _build_portfolio_snapshot():
             "profit": profit,
             "profit_pct": profit_pct,
             "profit_pct_str": profit_pct_str,
+            "bias_60": bias_60,
+            "bias_60_str": f"{bias_60:+.1f}%" if bias_60 is not None else "N/A",
+            "dd_str": f"{tech.get('dd'):.1f}%" if tech.get('dd') is not None else "N/A",
+            "broken_250": broken_250,
+            "tpe_str": tpe_str,
+            "fpe_str": fpe_str
         })
 
     core_total_cost = sum(r["cost"] * r["shares"] for r in core_rows)
@@ -622,7 +650,40 @@ def _build_portfolio_snapshot():
 
     # Fetch Drawdowns
     sp5_hist = cached_sp500_historical(ttl=_TTL_NORMAL) or {}
-    sp500_dd = cached_drawdown("^GSPC", ttl=_TTL_NORMAL)
+    sp5_tech = cached_stock_technicals("^GSPC", ttl=_TTL_NORMAL) or {}
+    sp500_dd = sp5_tech.get("dd")
+
+    watchlist_items = []
+    for sym in WATCHLIST:
+        tech = cached_stock_technicals(sym, ttl=_TTL_NORMAL) or {}
+        w_price = tech.get("price")
+        w_ma60 = tech.get("ma60")
+        w_ma250 = tech.get("ma250")
+        w_dd = tech.get("dd")
+        
+        pe_data = cached_stock_pe(sym, ttl=3600)
+        w_tpe_str = f"{pe_data['trailingPE']:.1f}" if pe_data and pe_data.get('trailingPE') else "N/A"
+        w_fpe_str = f"{pe_data['forwardPE']:.1f}" if pe_data and pe_data.get('forwardPE') else "N/A"
+        
+        bias_60 = (w_price - w_ma60) / w_ma60 * 100 if w_price and w_ma60 else None
+        is_broken_250 = w_price < w_ma250 if w_price and w_ma250 else False
+        is_dd_20 = w_dd is not None and w_dd <= -20
+        
+        alerts = []
+        if is_dd_20: alerts.append("回檔 > 20%")
+        if is_broken_250: alerts.append("跌破年線")
+        if not alerts and w_price and w_ma60 and bias_60 < -10: alerts.append("距季線 <-10%")
+        
+        watchlist_items.append({
+            "symbol": sym,
+            "price_str": f"{w_price:.2f}" if w_price else "N/A",
+            "tpe_str": w_tpe_str,
+            "fpe_str": w_fpe_str,
+            "bias_60": bias_60,
+            "dd_str": f"{w_dd:.1f}%" if w_dd is not None else "N/A",
+            "alerts": alerts,
+            "is_alert": bool(alerts)
+        })
 
     # Strategy Conditions
     vix_val = fear_greed.get("vix")
@@ -714,6 +775,7 @@ def _build_portfolio_snapshot():
         "sp500_fpe_valuation": sp500_fpe["valuation"],
         "sp500_fpe_source_name": sp500_fpe["source_name"],
         "sp500_fpe_source_url": sp500_fpe["source_url"],
+        "watchlist_items": watchlist_items,
         "day_of_year": day_of_year,
         "finra_val_str": finra_margin.get("val_str", "N/A"),
         "finra_month": finra_margin.get("latest_month", "N/A"),
@@ -1455,11 +1517,11 @@ TEMPLATE = r"""<!doctype html>
             <div class="fear-greed-gauge-wrap">
                 <div class="fear-greed-gauge">
                     <svg viewBox="0 0 640 340" aria-label="CNN Fear and Greed Gauge">
-                        <path d="M38 300 A282 282 0 0 1 121.59 100.51 L175.63 154.55 A205.58 205.58 0 0 0 114.42 300 Z" fill="#eab0a8" stroke="#b11235" stroke-width="2"/>
-                        <path d="M125.83 96.42 A282 282 0 0 1 254.96 26.09 L270.57 100.48 A205.58 205.58 0 0 0 179.67 149.97 Z" fill="#e4e4e4"/>
-                        <path d="M259.83 25.09 A282 282 0 0 1 380.17 25.09 L364.56 99.48 A205.58 205.58 0 0 0 275.44 99.48 Z" fill="#dddddd"/>
-                        <path d="M385.04 26.09 A282 282 0 0 1 514.17 96.42 L460.33 149.97 A205.58 205.58 0 0 0 369.43 100.48 Z" fill="#e4e4e4"/>
-                        <path d="M518.41 100.51 A282 282 0 0 1 602 300 L525.58 300 A205.58 205.58 0 0 0 464.37 154.55 Z" fill="#e8e8e8"/>
+                        <path id="fg-sector-0" d="M38 300 A282 282 0 0 1 121.59 100.51 L175.63 154.55 A205.58 205.58 0 0 0 114.42 300 Z" fill="#e8e8e8"/>
+                        <path id="fg-sector-1" d="M125.83 96.42 A282 282 0 0 1 254.96 26.09 L270.57 100.48 A205.58 205.58 0 0 0 179.67 149.97 Z" fill="#e4e4e4"/>
+                        <path id="fg-sector-2" d="M259.83 25.09 A282 282 0 0 1 380.17 25.09 L364.56 99.48 A205.58 205.58 0 0 0 275.44 99.48 Z" fill="#dddddd"/>
+                        <path id="fg-sector-3" d="M385.04 26.09 A282 282 0 0 1 514.17 96.42 L460.33 149.97 A205.58 205.58 0 0 0 369.43 100.48 Z" fill="#e4e4e4"/>
+                        <path id="fg-sector-4" d="M518.41 100.51 A282 282 0 0 1 602 300 L525.58 300 A205.58 205.58 0 0 0 464.37 154.55 Z" fill="#e8e8e8"/>
 
                         <path d="M114.42 300 A205.58 205.58 0 0 1 525.58 300" fill="none" stroke="#dedede" stroke-width="76" stroke-linecap="butt"/>
 
@@ -1478,7 +1540,7 @@ TEMPLATE = r"""<!doctype html>
                         <text x="488" y="297" class="gauge-tick-text">100</text>
 
                         <circle cx="320" cy="300" r="58" fill="#e7e7e7"/>
-                        <text id="fearGreedGaugeScore" x="320" y="294" text-anchor="middle" class="gauge-number">{{ fear_greed_score_str }}</text>
+                        <text id="fearGreedGaugeScore" x="320" y="340" text-anchor="middle" class="gauge-number">{{ fear_greed_score_str }}</text>
 
                         <g id="fearGreedNeedle" class="gauge-needle">
                             <rect x="128" y="294" width="192" height="12" fill="#1f1f1f" rx="2" ry="2"/>
@@ -1822,6 +1884,10 @@ TEMPLATE = r"""<!doctype html>
                     <th>成本</th>
                     <th>股數</th>
                     <th>市值 (USD)</th>
+                    <th>高點回檔 (1Y)</th>
+                    <th>Trailing P/E</th>
+                    <th>Forward P/E</th>
+                    <th>年線狀態</th>
                     <th>報酬率</th>
                 </tr>
             </thead>
@@ -1837,9 +1903,66 @@ TEMPLATE = r"""<!doctype html>
                     <td>{{ it.shares_str }}</td>
                     <td>{{ it.mv_str }}</td>
                     <td>
+                        <span class="{% if it.dd_str != 'N/A' and '-' in it.dd_str %}loss-cell{% endif %}">
+                            {{ it.dd_str }}
+                        </span>
+                    </td>
+                    <td>{{ it.tpe_str }}</td>
+                    <td>{{ it.fpe_str }}</td>
+                    <td>
+                        {% if it.broken_250 %}
+                        <span style="color:var(--red); font-size:0.75rem; background:var(--red-dim); padding:2px 6px; border-radius:4px;">跌破</span>
+                        {% else %}
+                        <span style="color:var(--green); font-size:0.75rem; background:var(--green-dim); padding:2px 6px; border-radius:4px;">站上</span>
+                        {% endif %}
+                    </td>
+                    <td>
                         <span class="{% if it.profit_pct > 0 %}gain-cell gain-bg{% elif it.profit_pct < 0 %}loss-cell loss-bg{% endif %}">
                             {% if it.profit_pct > 0 %}+{% endif %}{{ it.profit_pct_str }}
                         </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- WATCHLIST -->
+<div class="table-section" style="margin-bottom: 40px;">
+    <div class="table-header">Watchlist Alerts · 觀察名單預警</div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>代號 Symbol</th>
+                    <th>現價</th>
+                    <th>高點回檔 (1Y)</th>
+                    <th>Trailing P/E</th>
+                    <th>Forward P/E</th>
+                    <th>預警訊號</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for w in watchlist_items %}
+                <tr>
+                    <td>{{ w.symbol }}</td>
+                    <td>{{ w.price_str }}</td>
+                    <td>
+                        <span class="{% if w.dd_str != 'N/A' and '-' in w.dd_str %}loss-cell{% endif %}">
+                            {{ w.dd_str }}
+                        </span>
+                    </td>
+                    <td>{{ w.tpe_str }}</td>
+                    <td>{{ w.fpe_str }}</td>
+                    <td style="text-align: right;">
+                        {% if w.is_alert %}
+                            {% for a in w.alerts %}
+                                <span style="display:inline-block; margin-left:6px; font-size:0.7rem; background:var(--red); color:#fff; padding:2px 6px; border-radius:4px; font-family:'Noto Sans TC', sans-serif;">{{ a }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span style="color:var(--text-dim); font-size:0.75rem;">正常</span>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -1919,6 +2042,31 @@ function updateFearGreedGauge(score) {
     fgNeedle.setAttribute('transform', `rotate(${angle} 320 300)`);
     if (fgGaugeScore) {
         fgGaugeScore.textContent = Math.round(clamped).toString();
+    }
+    
+    const fills = ['#eab0a8', '#f2c7a6', '#e8d18d', '#a1d99b', '#74c476'];
+    const strokes = ['#b11235', '#d35400', '#c39d2e', '#31a354', '#006d2c'];
+    const bgFills = ['#e8e8e8', '#e4e4e4', '#dddddd', '#e4e4e4', '#e8e8e8'];
+    
+    let activeIdx = -1;
+    if(clamped <= 24) activeIdx = 0;
+    else if(clamped <= 44) activeIdx = 1;
+    else if(clamped <= 55) activeIdx = 2;
+    else if(clamped <= 74) activeIdx = 3;
+    else activeIdx = 4;
+    
+    for(let i=0; i<5; i++) {
+        const sec = document.getElementById('fg-sector-' + i);
+        if(!sec) continue;
+        if(i === activeIdx) {
+            sec.setAttribute('fill', fills[i]);
+            sec.setAttribute('stroke', strokes[i]);
+            sec.setAttribute('stroke-width', '2');
+        } else {
+            sec.setAttribute('fill', bgFills[i]);
+            sec.removeAttribute('stroke');
+            sec.removeAttribute('stroke-width');
+        }
     }
 }
 
