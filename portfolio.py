@@ -38,11 +38,11 @@ FULL_PORTFOLIO = [
     {"symbol": "KO",    "shares": 83.47431,  "cost": 68.009},
     {"symbol": "AEP",   "shares": 15,        "cost": 105.216},
     {"symbol": "DUK",   "shares": 16,        "cost": 115.79375},
-        {"symbol": "DPZ",   "shares": 2,        "cost": 368.735},
+    {"symbol": "DPZ",   "shares": 3,        "cost": 368.993},
     {"symbol": "AXP",   "shares": 5,        "cost": 300.21},
 
     {"symbol": "MCD",   "shares": 10,        "cost": 303.413},
-    {"symbol": "CEG",   "shares": 23,        "cost": 321.596},
+    {"symbol": "CEG",   "shares": 24,        "cost":320.49375},
     {"symbol": "LEU",   "shares": 18,        "cost": 265.216},
     {"symbol": "AMZN",  "shares": 18,        "cost": 220.786667},
     {"symbol": "ETN",   "shares": 2,         "cost": 341.46},
@@ -54,7 +54,7 @@ FULL_PORTFOLIO = [
 ]
 
 WATCHLIST = [
-    "AAPL", "META","DIS", "AMD", "COST", "GEV","VRT","JNJ"
+    "AAPL", "META","DIS", "AMD", "COST", "GEV","VRT","JNJ","CMCSA","INTC"
 ]
 
 # ================== 快取設定 ==================
