@@ -33,14 +33,15 @@ FULL_PORTFOLIO = [
     {"symbol": "GOOGL", "shares": 80.47318,  "cost": 185.028},
     {"symbol": "NVDA",  "shares": 48.22095,   "cost": 140.098},
     # {"symbol": "QCOM",  "shares": 12,        "cost": 161.4525},
-    {"symbol": "MSFT",  "shares": 5,         "cost": 415.454},
+    # {"symbol": "MSFT",  "shares": 5,         "cost": 415.454},
     {"symbol": "MU",    "shares": 50,        "cost": 367.1426},
     {"symbol": "KO",    "shares": 83.47431,  "cost": 68.009},
     {"symbol": "AEP",   "shares": 15,        "cost": 105.216},
     {"symbol": "DUK",   "shares": 16,        "cost": 115.79375},
     {"symbol": "DPZ",   "shares": 3,        "cost": 368.993},
     {"symbol": "AXP",   "shares": 5,        "cost": 300.21},
-
+    
+    {"symbol": "V",   "shares": 10,        "cost": 317.171},
     {"symbol": "MCD",   "shares": 10,        "cost": 303.413},
     {"symbol": "CEG",   "shares": 24,        "cost":320.49375},
     {"symbol": "LEU",   "shares": 18,        "cost": 265.216},
@@ -54,7 +55,7 @@ FULL_PORTFOLIO = [
 ]
 
 WATCHLIST = [
-    "AAPL", "META","DIS", "AMD", "COST", "GEV","VRT","JNJ","CMCSA","INTC"
+    "AAPL", "META","DIS", "AMD", "COST", "GEV","VRT","JNJ","CMCSA","INTC","EQT","EXE"
 ]
 
 # ================== 快取設定 ==================
