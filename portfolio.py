@@ -42,7 +42,7 @@ FULL_PORTFOLIO = [
     {"symbol": "AXP",   "shares": 5,        "cost": 300.21},
     
     {"symbol": "V",   "shares": 10,        "cost": 317.171},
-    {"symbol": "MCD",   "shares": 9,        "cost": 304.068889},
+    {"symbol": "MCD",   "shares": 10,        "cost": 304.068889},
     {"symbol": "CEG",   "shares": 24,        "cost":320.49375},
     {"symbol": "LEU",   "shares": 18,        "cost": 265.216},
     {"symbol": "AMZN",  "shares": 18,        "cost": 220.786667},
