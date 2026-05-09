@@ -1486,6 +1486,46 @@ TEMPLATE = r"""<!doctype html>
     </div>
 </div>
 
+<!-- ── CURRENT OPERATIONS ── -->
+<div class="full-width-card" style="margin-top: 32px; margin-bottom: 0;">
+    <div class="chart-label">Current Strategy · 目前操作策略</div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+        <div class="macro-detail-item" style="display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="color: var(--text-dim); font-size: 0.85rem; line-height: 1.6; margin-bottom: 16px;">
+                1. 跟隨巴菲特持續加碼日股<br>
+                2. 美元持續貶值<br>
+                3. 台灣錢淹腳目瘋狂去日韓消費<br>
+                4. 成分股有三星海力士吃到記憶體BUFF<br>
+                5. 美股估值過高，看好低本益比的亞太市場
+            </div>
+            <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light); font-weight: 700; font-size: 1.1rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; text-align: right;">
+                ==&gt; 持續買進 VPL
+            </div>
+        </div>
+        <div class="macro-detail-item" style="display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="color: var(--text-dim); font-size: 0.85rem; line-height: 1.6; margin-bottom: 16px;">
+                1. 美股市場估值太高但公用事業估值仍低<br>
+                2. 崩盤的時候有殖利率保護<br>
+                3. 受惠於 AI BUFF 電力股獲利上升
+            </div>
+            <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light); font-weight: 700; font-size: 1.1rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; text-align: right;">
+                ==&gt; 持續買進 XLU
+            </div>
+        </div>
+        <div class="macro-detail-item" style="display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="color: var(--text-dim); font-size: 0.85rem; line-height: 1.6; margin-bottom: 16px;">
+                1. 食品股估值接近歷史新低<br>
+                2. 景氣好人們吃速食慶祝<br>
+                3. 景氣差人類還是得吃薯條喝可樂<br>
+                4. 崩盤的時候有殖利率保護
+            </div>
+            <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light); font-weight: 700; font-size: 1.1rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; text-align: right;">
+                ==&gt; 持續買進 MCD、DPZ、KO
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ── DASHBOARD ── -->
 <div class="main">
     <!-- Summary -->
