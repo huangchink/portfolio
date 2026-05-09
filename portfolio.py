@@ -26,31 +26,34 @@ app = Flask(__name__)
 EXCLUDED_ETFS_US = set()
 
 FULL_PORTFOLIO = [
-    {"symbol": "TSM",   "shares": 65,        "cost": 311.863846},
+    {"symbol": "TSM",   "shares": 80,        "cost": 368.0435},
     {"symbol": "SNPS",  "shares": 4,         "cost": 396.15},
     {"symbol": "YUM",   "shares": 1,         "cost": 141.34},
     {"symbol": "UNH",   "shares": 22,        "cost": 310.86},
     {"symbol": "GOOGL", "shares": 80.47318,  "cost": 185.028},
     {"symbol": "NVDA",  "shares": 48.22095,   "cost": 140.098},
-    # {"symbol": "QCOM",  "shares": 12,        "cost": 161.4525},
+    {"symbol": "QCOM",  "shares": 5,        "cost": 159.926},
     # {"symbol": "MSFT",  "shares": 5,         "cost": 415.454},
     {"symbol": "MU",    "shares": 50,        "cost": 367.1426},
+    {"symbol": "SNDK",    "shares": 2,        "cost": 1379.41},
+
     {"symbol": "KO",    "shares": 83.47431,  "cost": 68.009},
     {"symbol": "AEP",   "shares": 15,        "cost": 105.216},
     {"symbol": "DUK",   "shares": 16,        "cost": 115.79375},
     {"symbol": "DPZ",   "shares": 3,        "cost": 368.993},
     {"symbol": "AXP",   "shares": 5,        "cost": 300.21},
-    
+    {"symbol": "CVX",   "shares": 5,        "cost": 188.03},
+
     {"symbol": "V",   "shares": 10,        "cost": 317.171},
-    {"symbol": "MCD",   "shares": 10,        "cost": 304.068889},
+    {"symbol": "MCD",   "shares": 13,        "cost": 298.9},
     {"symbol": "CEG",   "shares": 24,        "cost":320.49375},
     {"symbol": "LEU",   "shares": 18,        "cost": 265.216},
     {"symbol": "AMZN",  "shares": 18,        "cost": 220.786667},
-    {"symbol": "ETN",   "shares": 2,         "cost": 341.46},
+    {"symbol": "ETN",   "shares": 1,         "cost": 394.02},
     {"symbol": "HUBB",  "shares": 4,         "cost": 413.425},
     {"symbol": "FSLR",  "shares": 10,         "cost": 221.928},
-    # {"symbol": "VST",   "shares": 14,        "cost": 166.08},
-    # {"symbol": "TSLA",  "shares": 5.51725,   "cost": 436.234},
+    {"symbol": "VST",   "shares": 16,        "cost": 163.9},
+    {"symbol": "TSLA",  "shares": 5.51725,   "cost": 436.234},
 
 ]
 
@@ -1997,7 +2000,7 @@ TEMPLATE = r"""<!doctype html>
     </div>
     <div style="font-size:.75rem;color:#888;line-height:1.75;">
         <strong style="color:#bbb;">策略摘要：</strong>
-        科技成長（GOOGL、NVDA、MSFT、TSM、SNPS、AMZN、MU）為核心，搭配防禦消費（KO、MCD、YUM、DPZ、UNH）+ 公用事業（AEP、DUK）作為大跌時的護城層。清潔能源（CEG、FSLR）對應 AI 電力需求長期主題，核能（LEU）適居去碳化潮流。
+        科技成長（GOOGL、NVDA、TSM、AMZN、MU）為核心，搭配防禦消費（KO、MCD、VISA、UNH）+ 公用事業（AEP、DUK）作為大跌時的護城層。清潔能源（CEG、FSLR）、核能（LEU）對應 AI 電力需求長期主題，。
     </div>
 </div>
 
