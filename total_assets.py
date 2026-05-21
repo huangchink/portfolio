@@ -22,33 +22,33 @@ app = Flask(__name__)
 
 # 1. 美股個股與ETF (包含黃金、美債)
 US_STOCKS = [
-    {"symbol": "TSM",   "shares": 70,        "cost": 361.481},
+    {"symbol": "TSM",   "shares": 81,        "cost": 368.334},
     {"symbol": "SNPS",  "shares": 1,         "cost": 459.31},
     {"symbol": "YUM",   "shares": 1,         "cost": 141.34},
-    {"symbol": "UNH",   "shares": 22,        "cost": 310.86},
+    {"symbol": "UNH",   "shares": 15,        "cost": 310.86},
     {"symbol": "GOOGL", "shares": 80.47318,  "cost": 185.028},
     {"symbol": "GEV", "shares": 1,  "cost": 997.44},
-    {"symbol": "INTC", "shares": 5,  "cost": 66.978},
+    {"symbol": "INTC", "shares": 30,  "cost": 114.246},
 
     {"symbol": "NVDA",  "shares": 48.22095,   "cost": 140.098},
     {"symbol": "MU",    "shares": 6,        "cost": 418.088},
-    {"symbol": "KO",    "shares": 83.47431,  "cost": 68.009},
+    {"symbol": "KO",    "shares": 85.47431,  "cost": 68.17},
     {"symbol": "AEP",   "shares": 15,        "cost": 105.216},
     {"symbol": "DUK",   "shares": 16,        "cost": 115.79375},
     {"symbol": "DPZ",   "shares": 3,        "cost": 368.993},
     {"symbol": "AXP",   "shares": 5,        "cost": 300.21},
-    {"symbol": "V",   "shares": 10,        "cost": 317.171},
-    {"symbol": "MCD",   "shares": 10,        "cost": 303.413},
+    {"symbol": "V",   "shares": 5,        "cost": 310.006},
+    {"symbol": "MCD",   "shares": 23,        "cost": 289.804783},
     {"symbol": "CEG",   "shares": 24,        "cost": 320.49375},
     {"symbol": "LEU",   "shares": 18,        "cost": 265.216},
     {"symbol": "AMZN",  "shares": 18,        "cost": 220.786667},
     {"symbol": "ETN",   "shares": 2,         "cost": 341.46},
-    {"symbol": "HUBB",  "shares": 4,         "cost": 413.425},
+    {"symbol": "HUBB",  "shares": 6,         "cost": 437.18},
     {"symbol": "FSLR",  "shares": 10,         "cost": 221.928},
     
     # ETF 等標的
     {"symbol": "AVDV", "shares": 30,         "cost": 99.17},
-    {"symbol": "EFV",  "shares": 40,         "cost": 78.925},
+    # {"symbol": "EFV",  "shares": 40,         "cost": 78.925},
     {"symbol": "VOO",  "shares": 77.06978,   "cost": 517.407991},
     {"symbol": "VEA",  "shares": 108.98114,   "cost": 55.504191},
 
@@ -62,7 +62,7 @@ US_STOCKS = [
 TW_STOCKS = [
     {"symbol": "006208.TW", "name": "富邦台50", "shares": 10000, "cost": 115.46},
     {"symbol": "0050.TW",   "name": "元大台灣50", "shares": 13609, "cost": 47.03},
-    {"symbol": "2330.TW",   "name": "台積電", "shares": 800,   "cost": 1532.86},
+    {"symbol": "2330.TW",   "name": "台積電", "shares": 1000,   "cost": 1686.29},
     {"symbol": "2454.TW",   "name": "聯發科", "shares": 50,    "cost": 1481},
     {"symbol": "2887.TW",   "name": "台新金", "shares": 5308,  "cost": 19.07},
     {"symbol": "2834.TW",   "name": "臺企銀", "shares": 3471,  "cost": 14.08},
@@ -85,10 +85,15 @@ COMMODITIES = [
     {"symbol": "PDBC", "shares": 200, "cost": 17.575},
 ]
 
-# 6. 儲蓄險 (單位: 美元)
+# 6. 儲蓄險
 INSURANCE = [
-    {"name": "添美盛美元", "value": 90417, "rate": 3.75},
-    {"name": "祿美滿利變美元", "value": 57963, "rate": 1.8},
+    {"name": "添美盛美元", "value": 90417, "rate": 3.75, "currency": "USD"},
+    {"name": "祿美滿利變美元", "value": 57963, "rate": 1.8, "currency": "USD"},
+    {"name": "富貴年年終身壽險", "value": 312655, "rate": 7, "currency": "TWD"},
+    {"name": "得意還本終身壽險", "value": 320257, "rate": 7, "currency": "TWD"},
+    {"name": "鍾愛還本終身壽險", "value": 571998, "rate": 6.75, "currency": "TWD"},
+    {"name": "富貴年年終身壽險", "value": 630487, "rate": 7, "currency": "TWD"},
+    {"name": "好事年年終身壽險", "value": 2048616 - 800000, "rate": 2.25, "currency": "TWD"},
 ]
 
 # 7. 加密貨幣
@@ -274,15 +279,24 @@ def _build_assets_snapshot():
     ins_total_mv_usd = 0.0
     ins_total_mv_twd = 0.0
     for row in INSURANCE:
-        mv_usd = row.get("value", 0)
+        value = row.get("value", 0)
         rate = row.get("rate", 0)
+        currency = row.get("currency", "USD")
         
-        mv_twd = mv_usd * usd_twd
+        if currency == "TWD":
+            mv_twd = value
+            mv_usd = value / usd_twd if usd_twd else 0
+        else:
+            mv_usd = value
+            mv_twd = value * usd_twd
+            
         ins_total_mv_usd += mv_usd
         ins_total_mv_twd += mv_twd
         
         ins_items.append({
             "name": row["name"],
+            "value": value,
+            "currency": currency,
             "value_usd": mv_usd,
             "value_twd": mv_twd,
             "rate": rate
@@ -939,7 +953,9 @@ TEMPLATE = r"""<!doctype html>
             <thead>
                 <tr>
                     <th>名稱</th>
-                    <th>保單解約金 (USD)</th>
+                    <th>幣別</th>
+                    <th>保單價值</th>
+                    <th>等值美金 (USD)</th>
                     <th>約當台幣 (TWD)</th>
                     <th>預定利率</th>
                 </tr>
@@ -948,6 +964,8 @@ TEMPLATE = r"""<!doctype html>
                 {% for it in ins_items %}
                 <tr>
                     <td>{{ it.name }}</td>
+                    <td>{{ it.currency }}</td>
+                    <td>{{ "{:,.2f}".format(it.value) if it.currency == 'USD' else "{:,.0f}".format(it.value) }}</td>
                     <td>{{ "{:,.2f}".format(it.value_usd) }}</td>
                     <td>{{ "{:,.0f}".format(it.value_twd) }}</td>
                     <td style="color: var(--gold-light);">{{ "%.2f"|format(it.rate) }}%</td>
