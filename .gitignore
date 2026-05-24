@@ -1,0 +1,20 @@
+# Local-only files
+total_assets.py
+.local-keep/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# App/runtime caches
+.yf-cache/
+.pytest_cache/
+
+# Local environment
+.env
+.venv/
+venv/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
