@@ -58,6 +58,7 @@ FULL_PORTFOLIO = [
     {"symbol": "GEV",   "shares": 2,        "cost": 1035.09},
     # {"symbol": "BRK/B",   "shares": 7,        "cost": 484.713},
 
+    {"symbol": "INTC",   "shares": 30,        "cost": 114.246},
 
     {"symbol": "V",   "shares": 5,        "cost": 310.006},
     {"symbol": "MCD",   "shares": 23,        "cost": 289.8},
@@ -100,6 +101,9 @@ HEADERS = {
     "Cache-Control": "no-cache",
     "Pragma": "no-cache",
 }
+
+def yahoo_quote_url(symbol):
+    return f"https://finance.yahoo.com/quote/{symbol.replace('/', '-')}/"
 
 def fetch_price_from_yahoo(symbol):
     url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?range=1d&interval=1d"
@@ -685,6 +689,7 @@ def _build_portfolio_snapshot():
 
         core_items.append({
             "symbol": row["symbol"],
+            "quote_url": yahoo_quote_url(row["symbol"]),
             "price": price,
             "price_str": price_str,
             "shares": row["shares"],
@@ -767,6 +772,7 @@ def _build_portfolio_snapshot():
         
         watchlist_items.append({
             "symbol": sym,
+            "quote_url": yahoo_quote_url(sym),
             "price_str": f"{w_price:.2f}" if w_price else "N/A",
             "tpe_str": w_tpe_str,
             "fpe_str": w_fpe_str,
@@ -1412,6 +1418,16 @@ TEMPLATE = r"""<!doctype html>
             text-align: left;
             letter-spacing: .5px;
         }
+        .symbol-link {
+            color: #fff;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: color .15s, border-color .15s;
+        }
+        .symbol-link:hover {
+            color: var(--gold-light);
+            border-bottom-color: var(--gold-dim);
+        }
         .gain-cell { color: var(--green); }
         .loss-cell { color: var(--red); }
         .gain-bg { background: var(--green-dim); border-radius: 3px; padding: 2px 6px; }
@@ -1536,7 +1552,7 @@ TEMPLATE = r"""<!doctype html>
                 4. 崩盤的時候有殖利率保護
             </div>
             <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light); font-weight: 700; font-size: 1.1rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; text-align: right;">
-                ==&gt; 持續買進 MCD、DPZ、KO
+                ==&gt; 持續買進 MCD、KO
             </div>
         </div>
     </div>
@@ -2084,7 +2100,7 @@ TEMPLATE = r"""<!doctype html>
                 <tr>
                     <td title="Trailing PE: {{ it.tpe_str }}&#10;Forward PE: {{ it.fpe_str }}" style="cursor: help;">
                         <span class="rank {% if loop.index <= 3 %}top{% endif %}">{{ loop.index }}</span>
-                        {{ it.symbol }}
+                        <a class="symbol-link" href="{{ it.quote_url }}" target="_blank" rel="noopener noreferrer" title="Open {{ it.symbol }} on Yahoo Finance">{{ it.symbol }}</a>
                     </td>
                     <td>{{ it.price_str }}</td>
                     <td>{{ it.cost_str }}</td>
@@ -2134,7 +2150,7 @@ TEMPLATE = r"""<!doctype html>
             <tbody>
                 {% for w in watchlist_items %}
                 <tr>
-                    <td>{{ w.symbol }}</td>
+                    <td><a class="symbol-link" href="{{ w.quote_url }}" target="_blank" rel="noopener noreferrer" title="Open {{ w.symbol }} on Yahoo Finance">{{ w.symbol }}</a></td>
                     <td>{{ w.price_str }}</td>
                     <td>
                         <span class="{% if w.dd_str != 'N/A' and '-' in w.dd_str %}loss-cell{% endif %}">
