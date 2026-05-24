@@ -26,10 +26,10 @@ app = Flask(__name__)
 EXCLUDED_ETFS_US = set()
 
 FULL_PORTFOLIO = [
-    {"symbol": "TSM",   "shares": 80,        "cost": 368.0435},
+    {"symbol": "TSM",   "shares": 81,        "cost": 368.334},
     {"symbol": "SNPS",  "shares": 4,         "cost": 396.15},
     {"symbol": "YUM",   "shares": 1,         "cost": 141.34},
-    {"symbol": "UNH",   "shares": 22,        "cost": 310.86},
+    {"symbol": "UNH",   "shares": 15,        "cost": 310.86},
     {"symbol": "GOOGL", "shares": 80.47318,  "cost": 185.028},
     {"symbol": "NVDA",  "shares": 48.22095,   "cost": 140.098},
     {"symbol": "QCOM",  "shares": 5,        "cost": 159.926},
@@ -43,17 +43,21 @@ FULL_PORTFOLIO = [
     {"symbol": "DPZ",   "shares": 3,        "cost": 368.993},
     {"symbol": "AXP",   "shares": 5,        "cost": 300.21},
     {"symbol": "CVX",   "shares": 5,        "cost": 188.03},
+    {"symbol": "EQT",   "shares": 10,        "cost": 57.093},
+    {"symbol": "GEV",   "shares": 2,        "cost": 1035.09},
+    {"symbol": "BRK/B",   "shares": 7,        "cost": 484.713},
 
-    {"symbol": "V",   "shares": 10,        "cost": 317.171},
-    {"symbol": "MCD",   "shares": 13,        "cost": 298.9},
-    {"symbol": "CEG",   "shares": 24,        "cost":320.49375},
+
+    {"symbol": "V",   "shares": 5,        "cost": 310.006},
+    {"symbol": "MCD",   "shares": 23,        "cost": 289.8},
+    {"symbol": "CEG",   "shares": 26,        "cost":317.623},
     {"symbol": "LEU",   "shares": 18,        "cost": 265.216},
     {"symbol": "AMZN",  "shares": 18,        "cost": 220.786667},
-    {"symbol": "ETN",   "shares": 1,         "cost": 394.02},
-    {"symbol": "HUBB",  "shares": 4,         "cost": 413.425},
-    {"symbol": "FSLR",  "shares": 10,         "cost": 221.928},
+    {"symbol": "ETN",   "shares": 2,         "cost": 402.28},
+    {"symbol": "HUBB",  "shares": 9,         "cost": 443.946667},
+    {"symbol": "FSLR",  "shares": 1,         "cost": 241.83},
     {"symbol": "VST",   "shares": 16,        "cost": 163.9},
-    {"symbol": "TSLA",  "shares": 5.51725,   "cost": 436.234},
+    {"symbol": "TSLA",  "shares": 5,   "cost": 436.234},
 
 ]
 
