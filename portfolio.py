@@ -13,7 +13,7 @@ import re
 from datetime import datetime, timedelta
 import requests
 import json
-import threading, time, os, logging, argparse
+import threading, time, os, logging, argparse, tempfile
 from pytz import timezone
 from pathlib import Path
 import yfinance as yf
@@ -21,6 +21,18 @@ import pandas as pd
 import numpy as np
 
 app = Flask(__name__)
+
+YFINANCE_CACHE_DIR = Path(
+    os.environ.get(
+        "YFINANCE_CACHE_DIR",
+        Path(tempfile.gettempdir()) / "portfolio-yfinance-cache",
+    )
+)
+
+try:
+    yf.cache.set_cache_location(str(YFINANCE_CACHE_DIR))
+except Exception as e:
+    print(f"Warning: failed to set yfinance cache location: {e}")
 
 # ================== 持股設定 ==================
 EXCLUDED_ETFS_US = set()
@@ -40,12 +52,11 @@ FULL_PORTFOLIO = [
     {"symbol": "KO",    "shares": 83.47431,  "cost": 68.009},
     {"symbol": "AEP",   "shares": 15,        "cost": 105.216},
     {"symbol": "DUK",   "shares": 16,        "cost": 115.79375},
-    {"symbol": "DPZ",   "shares": 3,        "cost": 368.993},
     {"symbol": "AXP",   "shares": 5,        "cost": 300.21},
     {"symbol": "CVX",   "shares": 5,        "cost": 188.03},
     {"symbol": "EQT",   "shares": 10,        "cost": 57.093},
     {"symbol": "GEV",   "shares": 2,        "cost": 1035.09},
-    {"symbol": "BRK/B",   "shares": 7,        "cost": 484.713},
+    # {"symbol": "BRK/B",   "shares": 7,        "cost": 484.713},
 
 
     {"symbol": "V",   "shares": 5,        "cost": 310.006},
@@ -649,9 +660,10 @@ def _build_portfolio_snapshot():
     core_total_mv = 0.0
     for row in core_rows:
         price = cached_close(row["symbol"], ttl=_TTL_FAST)
-        if price == "N/A":
+        if price is None or price == "N/A":
             mv = profit = profit_pct = 0.0
             price_str = mv_str = profit_pct_str = "N/A"
+            price = None
         else:
             mv = price * row["shares"]
             profit = mv - row["cost"] * row["shares"]
