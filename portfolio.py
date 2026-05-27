@@ -52,9 +52,9 @@ FULL_PORTFOLIO = [
     {"symbol": "KO",    "shares": 83.47431,  "cost": 68.009},
     {"symbol": "AEP",   "shares": 15,        "cost": 105.216},
     {"symbol": "DUK",   "shares": 16,        "cost": 115.79375},
-    {"symbol": "AXP",   "shares": 5,        "cost": 300.21},
-    {"symbol": "CVX",   "shares": 5,        "cost": 188.03},
-    {"symbol": "EQT",   "shares": 10,        "cost": 57.093},
+    {"symbol": "AXP",   "shares": 8,        "cost": 304.8725},
+    # {"symbol": "CVX",   "shares": 5,        "cost": 188.03},
+    # {"symbol": "EQT",   "shares": 10,        "cost": 57.093},
     {"symbol": "GEV",   "shares": 2,        "cost": 1035.09},
     # {"symbol": "BRK/B",   "shares": 7,        "cost": 484.713},
 
