@@ -38,18 +38,18 @@ except Exception as e:
 EXCLUDED_ETFS_US = set()
 
 FULL_PORTFOLIO = [
-    {"symbol": "TSM",   "shares": 81,        "cost": 368.334},
-    {"symbol": "SNPS",  "shares": 4,         "cost": 396.15},
+    {"symbol": "TSM",   "shares": 30,        "cost": 380},
+    {"symbol": "SNPS",  "shares": 9,         "cost": 490},
     {"symbol": "YUM",   "shares": 1,         "cost": 141.34},
     {"symbol": "UNH",   "shares": 15,        "cost": 310.86},
     {"symbol": "GOOGL", "shares": 80.47318,  "cost": 185.028},
     {"symbol": "NVDA",  "shares": 48.22095,   "cost": 140.098},
     {"symbol": "QCOM",  "shares": 5,        "cost": 159.926},
     # {"symbol": "MSFT",  "shares": 5,         "cost": 415.454},
-    {"symbol": "MU",    "shares": 50,        "cost": 367.1426},
-    {"symbol": "SNDK",    "shares": 2,        "cost": 1379.41},
+    {"symbol": "MU",    "shares": 12,        "cost": 367.1426},
+    # {"symbol": "SNDK",    "shares": 2,        "cost": 1379.41},
 
-    {"symbol": "KO",    "shares": 83.47431,  "cost": 68.009},
+    {"symbol": "KO",    "shares": 85.47431,  "cost": 68.009},
     {"symbol": "AEP",   "shares": 15,        "cost": 105.216},
     {"symbol": "DUK",   "shares": 16,        "cost": 115.79375},
     {"symbol": "AXP",   "shares": 8,        "cost": 304.8725},
@@ -61,20 +61,20 @@ FULL_PORTFOLIO = [
     {"symbol": "INTC",   "shares": 30,        "cost": 114.246},
 
     {"symbol": "V",   "shares": 5,        "cost": 310.006},
-    {"symbol": "MCD",   "shares": 23,        "cost": 289.8},
+    {"symbol": "MCD",   "shares": 30,        "cost": 280},
     {"symbol": "CEG",   "shares": 26,        "cost":317.623},
     {"symbol": "LEU",   "shares": 18,        "cost": 265.216},
     {"symbol": "AMZN",  "shares": 18,        "cost": 220.786667},
-    {"symbol": "ETN",   "shares": 2,         "cost": 402.28},
+    # {"symbol": "ETN",   "shares": 2,         "cost": 402.28},
     {"symbol": "HUBB",  "shares": 9,         "cost": 443.946667},
-    {"symbol": "FSLR",  "shares": 1,         "cost": 241.83},
-    {"symbol": "VST",   "shares": 16,        "cost": 163.9},
-    {"symbol": "TSLA",  "shares": 5,   "cost": 436.234},
+    # {"symbol": "FSLR",  "shares": 1,         "cost": 241.83},
+    {"symbol": "VST",   "shares": 16,        "cost": 159},
+    {"symbol": "TSLA",  "shares": 2,   "cost": 420},
 
 ]
 
 WATCHLIST = [
-    "AAPL", "META","DIS", "AMD", "COST", "GEV","VRT","JNJ","CMCSA","INTC","EQT","EXE"
+    "AAPL", "META","DIS", "AMD", "COST", "GEV","VRT","JNJ","EQT","MSFT","CDNS","SIMO"
 ]
 
 # ================== 快取設定 ==================
