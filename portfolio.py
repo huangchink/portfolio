@@ -43,7 +43,7 @@ FULL_PORTFOLIO = [
     {"symbol": "YUM",   "shares": 1,         "cost": 141.34},
     {"symbol": "UNH",   "shares": 15,        "cost": 310.86},
     {"symbol": "GOOGL", "shares": 80.47318,  "cost": 185.028},
-    {"symbol": "NVDA",  "shares": 48.22095,   "cost": 140.098},
+    {"symbol": "NVDA",  "shares": 62.22095,   "cost": 155.584},
     {"symbol": "QCOM",  "shares": 5,        "cost": 159.926},
     # {"symbol": "MSFT",  "shares": 5,         "cost": 415.454},
     {"symbol": "MU",    "shares": 12,        "cost": 367.1426},
@@ -62,7 +62,7 @@ FULL_PORTFOLIO = [
 
     {"symbol": "V",   "shares": 5,        "cost": 310.006},
     {"symbol": "MCD",   "shares": 30,        "cost": 280},
-    {"symbol": "CEG",   "shares": 26,        "cost":317.623},
+    {"symbol": "CEG",   "shares": 27,        "cost":292.848},
     {"symbol": "LEU",   "shares": 18,        "cost": 265.216},
     {"symbol": "AMZN",  "shares": 18,        "cost": 220.786667},
     # {"symbol": "ETN",   "shares": 2,         "cost": 402.28},
