@@ -10,6 +10,7 @@ Local preview: http://127.0.0.1:5000/
 
 from flask import Flask, render_template_string
 import re
+import html as html_lib
 from datetime import datetime, timedelta
 import requests
 import json
@@ -38,16 +39,17 @@ except Exception as e:
 EXCLUDED_ETFS_US = set()
 
 FULL_PORTFOLIO = [
-    {"symbol": "TSM",   "shares": 30,        "cost": 380},
-    {"symbol": "SNPS",  "shares": 9,         "cost": 490},
+    {"symbol": "TSM",   "shares": 32,        "cost": 388},
+    {"symbol": "SNPS",  "shares": 11,         "cost": 483.154},
     {"symbol": "YUM",   "shares": 1,         "cost": 141.34},
     {"symbol": "UNH",   "shares": 15,        "cost": 310.86},
     {"symbol": "GOOGL", "shares": 80.47318,  "cost": 185.028},
-    {"symbol": "NVDA",  "shares": 62.22095,   "cost": 155.584},
+    {"symbol": "NVDA",  "shares": 69.22095,   "cost": 160.107},
     {"symbol": "QCOM",  "shares": 5,        "cost": 159.926},
-    # {"symbol": "MSFT",  "shares": 5,         "cost": 415.454},
+    {"symbol": "MSFT",  "shares": 3,         "cost": 371.9533},
     {"symbol": "MU",    "shares": 12,        "cost": 367.1426},
     # {"symbol": "SNDK",    "shares": 2,        "cost": 1379.41},
+    {"symbol": "AAPL",  "shares":1,         "cost": 281.22},
 
     {"symbol": "KO",    "shares": 85.47431,  "cost": 68.009},
     {"symbol": "AEP",   "shares": 15,        "cost": 105.216},
@@ -59,6 +61,7 @@ FULL_PORTFOLIO = [
     # {"symbol": "BRK/B",   "shares": 7,        "cost": 484.713},
 
     {"symbol": "INTC",   "shares": 30,        "cost": 114.246},
+    {"symbol": "META",   "shares": 1,        "cost": 567.49},
 
     {"symbol": "V",   "shares": 5,        "cost": 310.006},
     {"symbol": "MCD",   "shares": 30,        "cost": 280},
@@ -70,6 +73,8 @@ FULL_PORTFOLIO = [
     # {"symbol": "FSLR",  "shares": 1,         "cost": 241.83},
     {"symbol": "VST",   "shares": 16,        "cost": 159},
     {"symbol": "TSLA",  "shares": 2,   "cost": 420},
+    {"symbol": "SIMO",  "shares": 1,   "cost": 273.38},
+    {"symbol": "CDNS",   "shares": 2,        "cost": 390.605},
 
 ]
 
@@ -139,11 +144,22 @@ def fetch_stock_pe(symbol):
         info = yf.Ticker(symbol).info
         return {
             "trailingPE": info.get("trailingPE"),
-            "forwardPE": info.get("forwardPE")
+            "forwardPE": info.get("forwardPE"),
+            "heldPercentInstitutions": info.get("heldPercentInstitutions"),
+            "shortPercentOfFloat": info.get("shortPercentOfFloat"),
+            "sharesShort": info.get("sharesShort"),
+            "sharesShortPriorMonth": info.get("sharesShortPriorMonth"),
         }
     except Exception as e:
         print(f"Error fetching PE for {symbol}: {e}")
-        return {"trailingPE": None, "forwardPE": None}
+        return {
+            "trailingPE": None,
+            "forwardPE": None,
+            "heldPercentInstitutions": None,
+            "shortPercentOfFloat": None,
+            "sharesShort": None,
+            "sharesShortPriorMonth": None,
+        }
 
 def cached_stock_pe(symbol, ttl=3600):
     key = ("pe", symbol)
@@ -157,6 +173,561 @@ def cached_stock_pe(symbol, ttl=3600):
 
 def _build_core_rows():
     return [r for r in FULL_PORTFOLIO if r["symbol"] not in EXCLUDED_ETFS_US]
+
+
+def _safe_float(value):
+    try:
+        if value is None or pd.isna(value):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def fetch_option_signal(symbol):
+    fallback = {
+        "direction": "資料不足",
+        "direction_class": "neutral",
+        "score_adjustment": 0,
+        "detail": "未取得可靠逐筆資料",
+    }
+    try:
+        ticker = yf.Ticker(symbol)
+        expirations = list(ticker.options or [])[:4]
+        if not expirations:
+            return fallback
+
+        call_volume = 0.0
+        put_volume = 0.0
+        candidates = []
+        for expiration in expirations:
+            chain = ticker.option_chain(expiration)
+            for option_type, frame in (("Call", chain.calls), ("Put", chain.puts)):
+                if frame is None or frame.empty:
+                    continue
+                volumes = pd.to_numeric(frame.get("volume"), errors="coerce").fillna(0)
+                if option_type == "Call":
+                    call_volume += float(volumes.sum())
+                else:
+                    put_volume += float(volumes.sum())
+
+                ranked = frame.assign(_volume=volumes).sort_values(
+                    ["_volume", "openInterest"], ascending=False
+                )
+                if ranked.empty:
+                    continue
+                top = ranked.iloc[0]
+                volume = _safe_float(top.get("volume")) or 0.0
+                open_interest = _safe_float(top.get("openInterest")) or 0.0
+                last_price = _safe_float(top.get("lastPrice"))
+                bid = _safe_float(top.get("bid"))
+                ask = _safe_float(top.get("ask"))
+                iv = _safe_float(top.get("impliedVolatility"))
+                candidates.append({
+                    "type": option_type,
+                    "expiration": expiration,
+                    "strike": _safe_float(top.get("strike")),
+                    "volume": volume,
+                    "open_interest": open_interest,
+                    "volume_oi": volume / open_interest if open_interest else None,
+                    "last_price": last_price,
+                    "bid": bid,
+                    "ask": ask,
+                    "iv": iv,
+                    "premium": (last_price or 0.0) * volume * 100,
+                })
+
+        if not candidates:
+            return fallback
+
+        put_call_ratio = put_volume / call_volume if call_volume else None
+        if put_call_ratio is None:
+            direction = "偏Put"
+            direction_class = "bearish"
+            score_adjustment = -3
+        elif put_call_ratio > 1.25:
+            direction = "偏Put"
+            direction_class = "bearish"
+            score_adjustment = -3 if put_call_ratio > 1.5 else -1
+        elif put_call_ratio < 0.8:
+            direction = "偏Call"
+            direction_class = "bullish"
+            score_adjustment = 3 if put_call_ratio < 0.65 else 1
+        else:
+            direction = "中性"
+            direction_class = "neutral"
+            score_adjustment = 0
+
+        top = max(candidates, key=lambda item: item["volume"])
+        last_price = top["last_price"]
+        bid = top["bid"]
+        ask = top["ask"]
+        if last_price is not None and bid is not None and ask is not None and bid <= last_price <= ask:
+            trade_side = "接近Ask" if abs(last_price - ask) <= abs(last_price - bid) else "接近Bid"
+        else:
+            trade_side = "成交側不明"
+        opening_hint = "可能新開倉" if top["volume_oi"] is not None and top["volume_oi"] >= 1 else "可能既有部位"
+        ratio_text = f"Put/Call量比 {put_call_ratio:.2f}" if put_call_ratio is not None else "Put/Call量比 N/A"
+        volume_oi_text = f"{top['volume_oi']:.2f}" if top["volume_oi"] is not None else "N/A"
+        iv_text = f"{top['iv'] * 100:.1f}%" if top["iv"] is not None else "N/A"
+        premium_text = f"${top['premium'] / 1_000_000:.2f}M"
+        detail = (
+            f"公開鏈彙總：{ratio_text}；最大合約 {top['type']} {top['expiration']} "
+            f"${top['strike']:.1f}，量 {top['volume']:.0f} / OI {top['open_interest']:.0f}，"
+            f"量/OI {volume_oi_text}，權利金約 {premium_text}，{trade_side}，"
+            f"IV {iv_text}，{opening_hint}。IV變化資料不足；"
+            f"未取得可靠逐筆 sweep/block/spread 資料。"
+        )
+        return {
+            "direction": direction,
+            "direction_class": direction_class,
+            "score_adjustment": score_adjustment,
+            "detail": detail,
+        }
+    except Exception as e:
+        print(f"Error fetching option signal for {symbol}: {e}")
+        return fallback
+
+
+def cached_option_signal(symbol, ttl=21600):
+    key = ("option_signal", symbol)
+    entry = _get_cache(key)
+    now = _now()
+    if entry and (now - entry["ts"] < ttl):
+        return entry["data"]
+    data = fetch_option_signal(symbol)
+    _set_cache(key, {"ts": now, "data": data})
+    return data
+
+
+def fetch_daily_entry_radar(core_rows):
+    symbols = [row["symbol"] for row in core_rows]
+    market_symbols = ["SPY", "QQQ", "^VIX", "^TNX"]
+    try:
+        history = yf.download(
+            symbols + market_symbols,
+            period="3mo",
+            interval="1d",
+            auto_adjust=False,
+            progress=False,
+            group_by="ticker",
+            threads=False,
+        )
+    except Exception as e:
+        print(f"Error fetching daily radar history: {e}")
+        return {"items": [], "date": "N/A", "market_summary": "市場資料不足"}
+
+    def series(symbol, field):
+        try:
+            if isinstance(history.columns, pd.MultiIndex):
+                return history[(symbol, field)].dropna()
+            return history[field].dropna()
+        except (KeyError, TypeError):
+            return pd.Series(dtype=float)
+
+    spy_close = series("SPY", "Close")
+    qqq_close = series("QQQ", "Close")
+    vix_close = series("^VIX", "Close")
+    tnx_close = series("^TNX", "Close")
+    market_score = 0
+    market_notes = []
+    if len(spy_close) >= 20 and len(qqq_close) >= 20:
+        no_new_low = (
+            spy_close.iloc[-1] > spy_close.tail(20).min()
+            and qqq_close.iloc[-1] > qqq_close.tail(20).min()
+        )
+        if no_new_low:
+            market_score += 7
+            market_notes.append("SPY/QQQ未創20日收盤新低")
+    if len(vix_close) >= 3:
+        vix_falling_two_days = vix_close.iloc[-1] < vix_close.iloc[-2] < vix_close.iloc[-3]
+        if vix_close.iloc[-1] < 25 or vix_falling_two_days:
+            market_score += 7
+            market_notes.append(f"VIX {vix_close.iloc[-1]:.2f}")
+    if len(tnx_close) >= 3:
+        yield_rising_two_days = tnx_close.iloc[-1] > tnx_close.iloc[-2] > tnx_close.iloc[-3]
+        if not yield_rising_two_days:
+            market_score += 6
+            market_notes.append(f"10Y {tnx_close.iloc[-1]:.2f}%未連續上衝")
+
+    sp500_return_20 = 0.0
+    if len(spy_close) >= 21:
+        sp500_return_20 = (spy_close.iloc[-1] / spy_close.iloc[-21] - 1) * 100
+
+    items = []
+    latest_dates = []
+    for symbol in symbols:
+        closes = series(symbol, "Close")
+        volumes = series(symbol, "Volume")
+        if len(closes) < 21 or len(volumes) < 20:
+            continue
+        latest_dates.append(closes.index[-1])
+        price = float(closes.iloc[-1])
+        previous_close = float(closes.iloc[-2])
+        change_pct = (price / previous_close - 1) * 100
+        sma5 = float(closes.tail(5).mean())
+        sma20 = float(closes.tail(20).mean())
+        low20 = float(closes.tail(20).min())
+        high20 = float(closes.tail(20).max())
+        return_5 = (price / float(closes.iloc[-6]) - 1) * 100
+        return_20 = (price / float(closes.iloc[-21]) - 1) * 100
+        average_volume_20 = float(volumes.tail(20).mean())
+        volume_relative = float(volumes.iloc[-1]) / average_volume_20 if average_volume_20 else None
+
+        profile = cached_stock_pe(symbol, ttl=21600) or {}
+        forward_pe = _safe_float(profile.get("forwardPE"))
+        institution_pct = _safe_float(profile.get("heldPercentInstitutions"))
+        short_pct = _safe_float(profile.get("shortPercentOfFloat"))
+        shares_short = _safe_float(profile.get("sharesShort"))
+        shares_short_prior = _safe_float(profile.get("sharesShortPriorMonth"))
+        short_change = (
+            (shares_short / shares_short_prior - 1) * 100
+            if shares_short and shares_short_prior else None
+        )
+        option_signal = cached_option_signal(symbol)
+
+        price_score = 0
+        price_score += 8 if price >= sma5 else 0
+        price_score += 7 if price >= sma20 else 0
+        price_score += 3 if change_pct > 0 else 0
+        price_score += 2 if return_5 > 0 else 0
+
+        volume_score = 8
+        if volume_relative is not None:
+            if volume_relative >= 1.5 and change_pct > 0:
+                volume_score = 15
+            elif volume_relative >= 1.5 and change_pct < 0:
+                volume_score = 4
+            elif volume_relative >= 1.0 and change_pct > 0:
+                volume_score = 12
+            elif volume_relative < 0.7:
+                volume_score = 6
+
+        relative_strength_score = max(
+            0, min(15, 7.5 + (return_20 - sp500_return_20) * 0.55)
+        )
+        chips_score = 8 + option_signal["score_adjustment"]
+        if short_change is not None:
+            chips_score += -2 if short_change > 10 else (1 if short_change < 0 else 0)
+        if short_pct is not None and short_pct > 0.08:
+            chips_score -= 2
+        chips_score = max(0, min(15, chips_score))
+
+        if forward_pe is None:
+            valuation_score = 7
+            forward_pe_note = "缺乏可靠分析師共識或資料不足"
+        elif forward_pe < 18:
+            valuation_score = 13
+            forward_pe_note = "分析師共識預估，資料具有時滯"
+        elif forward_pe < 28:
+            valuation_score = 11
+            forward_pe_note = "分析師共識預估，資料具有時滯"
+        elif forward_pe < 45:
+            valuation_score = 8
+            forward_pe_note = "分析師共識預估，對盈餘假設較敏感"
+        elif forward_pe < 80:
+            valuation_score = 5
+            forward_pe_note = "高估值或轉機階段，Forward P/E可比性較低"
+        else:
+            valuation_score = 2
+            forward_pe_note = "預估盈餘基期偏低，Forward P/E可能明顯失真"
+
+        total_score = round(
+            market_score + price_score + volume_score + relative_strength_score
+            + chips_score + valuation_score
+        )
+        recent_stop = float(closes.tail(3).min())
+        stop_distance = (price - recent_stop) / price if price else None
+        target_space = max(0.0, high20 - price)
+        risk_amount = max(0.0, price - recent_stop)
+        reward_risk = target_space / risk_amount if risk_amount else 0.0
+        individual_stable = (
+            price >= sma5
+            or closes.iloc[-1] >= closes.iloc[-2] >= closes.iloc[-3]
+            or (change_pct > 0 and volume_relative is not None and volume_relative >= 1.5)
+        )
+        hard_gate_ok = (
+            market_score >= 16
+            and individual_stable
+            and stop_distance is not None and stop_distance <= 0.08
+            and reward_risk >= 2
+        )
+
+        if total_score >= 80 and hard_gate_ok:
+            rating = "趕快進場"
+            rating_class = "enter"
+        elif total_score >= 65:
+            rating = "小加倉"
+            rating_class = "add"
+        elif total_score >= 50:
+            rating = "觀望"
+            rating_class = "watch"
+        else:
+            rating = "不要買"
+            rating_class = "avoid"
+
+        if chips_score >= 9 and price_score >= 12:
+            chips_status = "偏多"
+            chips_class = "bullish"
+        elif chips_score <= 5 or price_score <= 6:
+            chips_status = "偏空"
+            chips_class = "bearish"
+        else:
+            chips_status = "中性"
+            chips_class = "neutral"
+
+        score_breakdown = (
+            f"大盤 {market_score}/20、價格 {price_score}/20、成交量 {volume_score}/15、"
+            f"相對強度 {round(relative_strength_score)}/15、籌碼/選擇權 {round(chips_score)}/15、"
+            f"估值/基本面 {valuation_score}/15"
+        )
+        hard_gate_note = (
+            f"硬門檻：{'通過' if hard_gate_ok else '未通過'}；"
+            f"近3日停損距離 {(stop_distance * 100):.1f}%；"
+            f"20日高點風險報酬 {reward_risk:.1f}:1"
+        )
+        items.append({
+            "symbol": symbol,
+            "quote_url": yahoo_quote_url(symbol),
+            "price_str": f"{price:.2f}",
+            "change_pct": change_pct,
+            "change_str": f"{change_pct:+.2f}%",
+            "volume_relative": volume_relative,
+            "volume_relative_str": f"{volume_relative:.2f}x" if volume_relative is not None else "N/A",
+            "forward_pe_str": f"{forward_pe:.1f}" if forward_pe is not None else "N/A",
+            "forward_pe_note": forward_pe_note,
+            "institution_str": f"{institution_pct * 100:.1f}%" if institution_pct is not None else "N/A",
+            "institution_note": "ADR口徑，與一般美股公司不可完全比較" if symbol == "TSM" else "機構持股資料具有申報時滯",
+            "short_pct_str": f"{short_pct * 100:.2f}%" if short_pct is not None else "N/A",
+            "short_change": short_change,
+            "short_change_str": f"{short_change:+.1f}%" if short_change is not None else "N/A",
+            "option_direction": option_signal["direction"],
+            "option_class": option_signal["direction_class"],
+            "option_detail": option_signal["detail"],
+            "option_adjustment_str": f"{option_signal['score_adjustment']:+d}分",
+            "chips_status": chips_status,
+            "chips_class": chips_class,
+            "score": total_score,
+            "score_breakdown": score_breakdown,
+            "hard_gate_note": hard_gate_note,
+            "rating": rating,
+            "rating_class": rating_class,
+        })
+
+    items.sort(key=lambda item: item["score"], reverse=True)
+    report_date = max(latest_dates).strftime("%Y-%m-%d") if latest_dates else "N/A"
+    return {
+        "items": items,
+        "date": report_date,
+        "market_score": market_score,
+        "market_summary": "；".join(market_notes) if market_notes else "市場資料不足",
+    }
+
+
+def cached_daily_entry_radar(core_rows, ttl=21600):
+    key = ("daily_entry_radar", tuple(row["symbol"] for row in core_rows))
+    entry = _get_cache(key)
+    now = _now()
+    if entry and (now - entry["ts"] < ttl):
+        return entry["data"]
+    data = fetch_daily_entry_radar(core_rows)
+    _set_cache(key, {"ts": now, "data": data})
+    return data
+
+
+NASDAQ_ECONOMIC_CALENDAR_API = "https://api.nasdaq.com/api/calendar/economicevents"
+NASDAQ_ECONOMIC_CALENDAR_URL = "https://www.nasdaq.com/market-activity/economic-calendar"
+
+GLOBAL_EVENT_COUNTRIES = {
+    "United States": "美國",
+    "Euro Zone": "歐元區",
+    "United Kingdom": "英國",
+    "Germany": "德國",
+    "France": "法國",
+    "Italy": "義大利",
+    "Spain": "西班牙",
+    "Switzerland": "瑞士",
+    "Japan": "日本",
+    "China": "中國",
+    "Hong Kong": "香港",
+    "Taiwan": "台灣",
+    "South Korea": "南韓",
+    "Australia": "澳洲",
+    "New Zealand": "紐西蘭",
+    "Canada": "加拿大",
+    "India": "印度",
+    "Brazil": "巴西",
+}
+
+US_EVENT_COUNTRY_NAMES = {"United States", "United States of America", "U.S.", "US", "USA"}
+
+HIGH_IMPACT_EVENT_KEYWORDS = (
+    "interest rate decision", "fomc", "monetary policy", "fed chair", "powell",
+    "ecb president", "lagarde", "boj governor", "boe governor", "consumer price",
+    " cpi", "cpi ", "pce price", "nonfarm payroll", "employment change",
+    "unemployment rate", "gross domestic product", " gdp", "gdp ", "retail sales",
+)
+
+MEDIUM_IMPACT_EVENT_KEYWORDS = (
+    "pmi", "industrial production", "consumer confidence", "jobless claims",
+    "durable goods", "trade balance", "housing", "home sales", "speaks", "minutes",
+    "money supply", "business climate", "sentiment", "producer price", "ppi",
+    "manufacturing", "services index", "current account", "building permits",
+)
+
+
+def _clean_calendar_text(value, default="—"):
+    if value is None:
+        return default
+    text = html_lib.unescape(str(value))
+    text = re.sub(r"<[^>]+>", "", text).replace("\xa0", " ").strip()
+    return text if text and text not in {"-", "--"} else default
+
+
+def classify_global_event(event_name):
+    name = f" {event_name.lower()} "
+    if any(keyword in name for keyword in HIGH_IMPACT_EVENT_KEYWORDS):
+        return "高", "high", 1
+    if any(keyword in name for keyword in MEDIUM_IMPACT_EVENT_KEYWORDS):
+        return "中", "medium", 2
+    return "低", "low", 3
+
+
+def infer_global_event_impact(event_name, country):
+    name = event_name.lower()
+    if any(word in name for word in ("interest rate", "fomc", "monetary policy", "fed chair", "president", "governor", "speaks", "minutes")):
+        return "利率、匯率與金融股"
+    if any(word in name for word in ("consumer price", "cpi", "pce", "producer price", "ppi", "inflation")):
+        return "債券殖利率與成長股估值"
+    if any(word in name for word in ("payroll", "employment", "unemployment", "jobless", "wage")):
+        return "美元、消費與利率預期"
+    if any(word in name for word in ("gdp", "pmi", "industrial production", "manufacturing", "services index")):
+        return "景氣循環、工業與原物料"
+    if any(word in name for word in ("retail sales", "consumer confidence", "sentiment")):
+        return "消費股與支付網路"
+    if any(word in name for word in ("housing", "home sales", "building permits")):
+        return "地產、建材與利率敏感股"
+    if "money supply" in name:
+        return "流動性、銀行與風險偏好"
+    if country in {"China", "Hong Kong"}:
+        return "中國／亞洲股市與原物料"
+    return "當地股市、匯率與風險偏好"
+
+
+def fetch_upcoming_global_events(days=7, max_items=18):
+    now_tw = datetime.now(timezone("Asia/Taipei"))
+    now_utc = datetime.now(timezone("UTC"))
+    utc_zone = timezone("UTC")
+    weekday_labels = ["一", "二", "三", "四", "五", "六", "日"]
+    headers = dict(HEADERS)
+    headers.update({
+        "Accept": "application/json,text/plain,*/*",
+        "Referer": NASDAQ_ECONOMIC_CALENDAR_URL,
+    })
+    events = []
+    seen = set()
+    consecutive_failures = 0
+
+    for offset in range(days + 1):
+        event_date = (now_tw + timedelta(days=offset)).date()
+        try:
+            response = requests.get(
+                NASDAQ_ECONOMIC_CALENDAR_API,
+                params={"date": event_date.isoformat()},
+                headers=headers,
+                timeout=8,
+            )
+            response.raise_for_status()
+            rows = ((response.json().get("data") or {}).get("rows") or [])
+            consecutive_failures = 0
+        except Exception as e:
+            consecutive_failures += 1
+            print(f"Nasdaq economic calendar error for {event_date}: {e}")
+            if consecutive_failures >= 2 and not events:
+                break
+            continue
+
+        for row in rows:
+            event_name = _clean_calendar_text(row.get("eventName"), default="")
+            country = _clean_calendar_text(row.get("country"), default="")
+            gmt_time = _clean_calendar_text(row.get("gmt"), default="")
+            if not event_name:
+                continue
+            if country not in US_EVENT_COUNTRY_NAMES:
+                continue
+
+            event_datetime_utc = None
+            if re.fullmatch(r"\d{1,2}:\d{2}", gmt_time):
+                try:
+                    naive_datetime = datetime.strptime(
+                        f"{event_date.isoformat()} {gmt_time}", "%Y-%m-%d %H:%M"
+                    )
+                    event_datetime_utc = utc_zone.localize(naive_datetime)
+                    if event_datetime_utc < now_utc:
+                        continue
+                except ValueError:
+                    event_datetime_utc = None
+
+            if event_datetime_utc is not None:
+                event_datetime_tw = event_datetime_utc.astimezone(timezone("Asia/Taipei"))
+                date_str = f"{event_datetime_tw:%m/%d} 週{weekday_labels[event_datetime_tw.weekday()]}"
+                time_str = event_datetime_tw.strftime("%H:%M")
+                sort_key = event_datetime_utc.timestamp()
+            else:
+                date_str = f"{event_date:%m/%d} 週{weekday_labels[event_date.weekday()]}"
+                time_str = "全天／待定"
+                sort_key = utc_zone.localize(datetime.combine(event_date, datetime.min.time())).timestamp()
+
+            dedupe_key = (event_date.isoformat(), gmt_time, country, event_name)
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            importance, importance_class, importance_rank = classify_global_event(event_name)
+            events.append({
+                "date_str": date_str,
+                "time_str": time_str,
+                "country": GLOBAL_EVENT_COUNTRIES.get(country, country or "全球"),
+                "event_name": event_name,
+                "importance": importance,
+                "importance_class": importance_class,
+                "importance_rank": importance_rank,
+                "consensus": _clean_calendar_text(row.get("consensus")),
+                "previous": _clean_calendar_text(row.get("previous")),
+                "description": _clean_calendar_text(row.get("description"), default="無說明"),
+                "impact": infer_global_event_impact(event_name, country),
+                "sort_key": sort_key,
+            })
+
+    events.sort(key=lambda item: item["sort_key"])
+    important_events = [item for item in events if item["importance_rank"] <= 2]
+    if len(important_events) < 8:
+        important_events.extend(
+            item for item in events
+            if item["importance_rank"] == 3 and item not in important_events
+        )
+    selected_events = important_events[:max_items]
+    for item in selected_events:
+        item.pop("sort_key", None)
+        item.pop("importance_rank", None)
+
+    return {
+        "items": selected_events,
+        "source_name": "Nasdaq Economic Calendar",
+        "source_url": NASDAQ_ECONOMIC_CALENDAR_URL,
+        "range_str": f"未來 {days} 天 · 美國",
+        "status": "已更新" if selected_events else "資料暫時無法取得",
+    }
+
+
+def cached_upcoming_global_events(ttl=21600):
+    key = ("upcoming_us_events",)
+    entry = _get_cache(key)
+    now = _now()
+    if entry and (now - entry["ts"] < ttl):
+        return entry["data"]
+    data = fetch_upcoming_global_events()
+    _set_cache(key, {"ts": now, "data": data})
+    return data
 
 
 CNN_FNG_BASE_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata/"
@@ -659,6 +1230,8 @@ def cached_fear_greed(ttl=_TTL_NORMAL):
 def _build_portfolio_snapshot():
     updated_at_tw = datetime.now(timezone("Asia/Taipei")).strftime("%Y-%m-%d %H:%M")
     core_rows = _build_core_rows()
+    daily_radar = cached_daily_entry_radar(core_rows)
+    global_events = cached_upcoming_global_events()
 
     core_items = []
     core_total_mv = 0.0
@@ -842,6 +1415,15 @@ def _build_portfolio_snapshot():
 
     return {
         "updated_at_tw": updated_at_tw,
+        "daily_radar_items": daily_radar.get("items", []),
+        "daily_radar_date": daily_radar.get("date", "N/A"),
+        "daily_market_score": daily_radar.get("market_score", 0),
+        "daily_market_summary": daily_radar.get("market_summary", "市場資料不足"),
+        "global_event_items": global_events.get("items", []),
+        "global_events_source_name": global_events.get("source_name", "Nasdaq Economic Calendar"),
+        "global_events_source_url": global_events.get("source_url", NASDAQ_ECONOMIC_CALENDAR_URL),
+        "global_events_range": global_events.get("range_str", "未來 7 天 · 美國"),
+        "global_events_status": global_events.get("status", "資料暫時無法取得"),
         "core_items": core_items,
         "core_total_mv": core_total_mv,
         "core_total_cost": core_total_cost,
@@ -968,8 +1550,10 @@ TEMPLATE = r"""<!doctype html>
             --text-dim:   #6b6b6b;
             --green:      #3ddc84;
             --red:        #ff5f5f;
+            --blue:       #4da3ff;
             --green-dim:  rgba(61,220,132,.12);
             --red-dim:    rgba(255,95,95,.12);
+            --blue-dim:   rgba(77,163,255,.12);
         }
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1449,6 +2033,172 @@ TEMPLATE = r"""<!doctype html>
         }
         .rank.top { background: var(--gold-dim); color: var(--gold); }
 
+        /* ── UPCOMING U.S. EVENTS ── */
+        .global-events-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        .global-events-source {
+            color: var(--text-dim);
+            font-family: 'Noto Sans TC', sans-serif;
+            font-size: .68rem;
+            letter-spacing: 0;
+            text-decoration: none;
+            text-transform: none;
+            white-space: nowrap;
+        }
+        .global-events-source:hover { color: var(--blue); }
+        .global-events-table { min-width: 920px; }
+        .global-events-table th,
+        .global-events-table td {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        .event-date-cell { white-space: nowrap; }
+        .event-date-cell span {
+            display: block;
+            color: var(--text-dim);
+            font-size: .68rem;
+            margin-top: 2px;
+        }
+        .event-name-cell {
+            min-width: 220px;
+            text-align: left;
+            font-family: 'Noto Sans TC', sans-serif;
+            font-weight: 500;
+            color: #ddd;
+        }
+        .importance-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            font-family: 'Noto Sans TC', sans-serif;
+            font-size: .68rem;
+            font-weight: 700;
+        }
+        .importance-badge.high { color: var(--red); background: var(--red-dim); border-color: rgba(255,95,95,.3); }
+        .importance-badge.medium { color: var(--gold-light); background: rgba(201,168,76,.12); border-color: rgba(201,168,76,.3); }
+        .importance-badge.low { color: #888; background: rgba(255,255,255,.035); }
+        .event-estimate-cell { white-space: nowrap; }
+        .event-estimate-cell span { display: block; color: var(--text-dim); font-size: .66rem; margin-top: 3px; }
+        .event-impact-cell {
+            min-width: 180px;
+            color: #aaa;
+            font-family: 'Noto Sans TC', sans-serif;
+            font-size: .72rem;
+            line-height: 1.5;
+        }
+        .global-events-note {
+            padding-top: 10px;
+            color: var(--text-dim);
+            font-size: .66rem;
+            line-height: 1.6;
+        }
+
+        /* ── PORTFOLIO TABLE TABS ── */
+        .portfolio-tabs {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            overflow-x: auto;
+            padding-bottom: 1px;
+            border-bottom: 1px solid var(--border);
+        }
+        .portfolio-tab {
+            min-height: 42px;
+            padding: 10px 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            border: 0;
+            border-bottom: 2px solid transparent;
+            background: transparent;
+            color: #707070;
+            font-family: 'Noto Sans TC', sans-serif;
+            font-size: .78rem;
+            font-weight: 700;
+            letter-spacing: 0;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: color .15s, background .15s, border-color .15s;
+        }
+        .portfolio-tab:hover { color: #aaa; background: rgba(255,255,255,.025); }
+        .portfolio-tab.is-active {
+            color: var(--blue);
+            background: var(--blue-dim);
+            border-bottom-color: var(--blue);
+        }
+        .portfolio-tab:focus-visible { outline: 1px solid var(--blue); outline-offset: -2px; }
+        .portfolio-tab-panel[hidden] { display: none; }
+        .portfolio-tab-panel { margin-top: 0; }
+
+        /* ── DAILY ENTRY RADAR ── */
+        .daily-radar-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 0 14px;
+            color: var(--text-dim);
+            font-size: .72rem;
+            line-height: 1.6;
+        }
+        .daily-radar-market {
+            color: #bbb;
+        }
+        .daily-radar-table {
+            min-width: 1000px;
+        }
+        .daily-radar-table th,
+        .daily-radar-table td {
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+        .signal-badge,
+        .rating-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 24px;
+            padding: 3px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: 'Noto Sans TC', sans-serif;
+            font-size: .7rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .signal-badge.bullish { color: var(--green); background: var(--green-dim); border-color: rgba(61,220,132,.28); }
+        .signal-badge.bearish { color: var(--red); background: var(--red-dim); border-color: rgba(255,95,95,.28); }
+        .signal-badge.neutral { color: #bbb; background: rgba(255,255,255,.04); }
+        .score-cell {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 2px;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+        }
+        .score-cell small { color: var(--text-dim); font-size: .62rem; font-weight: 400; }
+        .rating-badge.enter { color: #111; background: var(--green); border-color: var(--green); }
+        .rating-badge.add { color: var(--green); background: var(--green-dim); border-color: rgba(61,220,132,.28); }
+        .rating-badge.watch { color: var(--gold-light); background: rgba(201,168,76,.12); border-color: rgba(201,168,76,.3); }
+        .rating-badge.avoid { color: var(--red); background: var(--red-dim); border-color: rgba(255,95,95,.28); }
+        .daily-radar-note {
+            padding-top: 12px;
+            color: var(--text-dim);
+            font-size: .68rem;
+            line-height: 1.7;
+            border-top: 1px solid rgba(255,255,255,.04);
+        }
+
         /* ── FOOTER ── */
         footer {
             max-width: 1100px;
@@ -1475,6 +2225,8 @@ TEMPLATE = r"""<!doctype html>
             .macro-value-panel { border-right: none; border-bottom: 1px solid var(--border); padding-right: 0; padding-bottom: 16px; }
             .macro-detail-grid { grid-template-columns: 1fr 1fr; }
             .table-section { padding: 0 20px; }
+            .global-events-heading { align-items: flex-start; flex-direction: column; gap: 6px; }
+            .daily-radar-meta { align-items: flex-start; flex-direction: column; gap: 4px; }
             footer { padding: 20px 20px 0; }
         }
     </style>
@@ -2076,9 +2828,130 @@ TEMPLATE = r"""<!doctype html>
     </div>
 </div>
 
-<!-- TABLE -->
+<!-- UPCOMING U.S. MARKET EVENTS -->
 <div class="table-section">
-    <div class="table-header">Holdings Detail · 個股明細</div>
+    <div class="table-header global-events-heading">
+        <span>Upcoming U.S. Market Events · 美國股市事件</span>
+        <a class="global-events-source" href="{{ global_events_source_url }}" target="_blank" rel="noopener noreferrer">
+            {{ global_events_range }} · {{ global_events_status }} · {{ global_events_source_name }}
+        </a>
+    </div>
+    <div class="table-wrapper">
+        <table class="global-events-table">
+            <thead>
+                <tr>
+                    <th>台北時間</th>
+                    <th>地區</th>
+                    <th style="text-align:left;">事件</th>
+                    <th>重要性</th>
+                    <th>共識 / 前值</th>
+                    <th style="text-align:left;">潛在影響</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in global_event_items %}
+                <tr>
+                    <td class="event-date-cell">{{ event.date_str }}<span>{{ event.time_str }}</span></td>
+                    <td>{{ event.country }}</td>
+                    <td class="event-name-cell" title="{{ event.description }}">{{ event.event_name }}</td>
+                    <td><span class="importance-badge {{ event.importance_class }}">{{ event.importance }}</span></td>
+                    <td class="event-estimate-cell">{{ event.consensus }}<span>前值 {{ event.previous }}</span></td>
+                    <td class="event-impact-cell">{{ event.impact }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align:center;color:var(--text-dim);padding:24px;">近期美國事件資料暫時無法取得</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="global-events-note">
+        僅追蹤美國地區事件；事件、時間、共識與前值為已取得資料；重要性與潛在影響為關鍵字規則推論，不代表事件結果或市場方向。時間均已換算為台北時間。
+    </div>
+</div>
+
+<!-- PORTFOLIO TABLE TABS -->
+<div class="table-section">
+    <div class="portfolio-tabs" role="tablist" aria-label="投資組合資料檢視">
+        <button class="portfolio-tab is-active" id="holdings-tab" type="button" role="tab" aria-selected="true" aria-controls="holdings-panel" tabindex="0" data-tab-target="holdings-panel">個股明細</button>
+        <button class="portfolio-tab" id="radar-tab" type="button" role="tab" aria-selected="false" aria-controls="daily-entry-radar" tabindex="-1" data-tab-target="daily-entry-radar">每日進場評分</button>
+        <button class="portfolio-tab" id="watchlist-tab" type="button" role="tab" aria-selected="false" aria-controls="watchlist-panel" tabindex="-1" data-tab-target="watchlist-panel">觀察名單預警</button>
+    </div>
+</div>
+
+<!-- DAILY ENTRY RADAR -->
+<div class="table-section portfolio-tab-panel" id="daily-entry-radar" role="tabpanel" aria-labelledby="radar-tab" hidden>
+    <div class="daily-radar-meta">
+        <span>正式收盤資料日：<strong style="color:#ddd;">{{ daily_radar_date }}</strong></span>
+        <span class="daily-radar-market">大盤環境 {{ daily_market_score }}/20 · {{ daily_market_summary }}</span>
+    </div>
+    <div class="table-wrapper">
+        <table class="daily-radar-table">
+            <thead>
+                <tr>
+                    <th>代號</th>
+                    <th>股價 / 漲跌</th>
+                    <th>量 / 20日均量</th>
+                    <th>Forward P/E</th>
+                    <th>機構持股</th>
+                    <th>Short / 變化</th>
+                    <th>選擇權方向</th>
+                    <th>籌碼狀態</th>
+                    <th>進場分數</th>
+                    <th>操作評級</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in daily_radar_items %}
+                <tr>
+                    <td>
+                        <span class="rank {% if loop.index <= 5 %}top{% endif %}">{{ loop.index }}</span>
+                        <a class="symbol-link" href="{{ item.quote_url }}" target="_blank" rel="noopener noreferrer">{{ item.symbol }}</a>
+                    </td>
+                    <td>
+                        {{ item.price_str }}
+                        <span class="{% if item.change_pct > 0 %}gain-cell{% elif item.change_pct < 0 %}loss-cell{% endif %}" style="display:block;font-size:.68rem;">
+                            {{ item.change_str }}
+                        </span>
+                    </td>
+                    <td class="{% if item.volume_relative is not none and item.volume_relative >= 1.5 %}{% if item.change_pct > 0 %}gain-cell{% else %}loss-cell{% endif %}{% endif %}">
+                        {{ item.volume_relative_str }}
+                    </td>
+                    <td title="{{ item.forward_pe_note }}" style="cursor:help;">{{ item.forward_pe_str }}</td>
+                    <td title="{{ item.institution_note }}" style="cursor:help;">{{ item.institution_str }}</td>
+                    <td>
+                        {{ item.short_pct_str }}
+                        <span class="{% if item.short_change is not none and item.short_change > 10 %}loss-cell{% elif item.short_change is not none and item.short_change < 0 %}gain-cell{% endif %}" style="display:block;font-size:.68rem;">
+                            {{ item.short_change_str }}
+                        </span>
+                    </td>
+                    <td title="{{ item.option_detail }}&#10;對分數影響：{{ item.option_adjustment_str }}" style="cursor:help;">
+                        <span class="signal-badge {{ item.option_class }}">{{ item.option_direction }}</span>
+                    </td>
+                    <td><span class="signal-badge {{ item.chips_class }}">{{ item.chips_status }}</span></td>
+                    <td title="{{ item.score_breakdown }}&#10;{{ item.hard_gate_note }}" style="cursor:help;">
+                        <span class="score-cell">{{ item.score }}<small>/100</small></span>
+                    </td>
+                    <td><span class="rating-badge {{ item.rating_class }}">{{ item.rating }}</span></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="10" style="text-align:center;color:var(--text-dim);padding:24px;">每日雷達資料暫時無法取得</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="daily-radar-note">
+        分數權重：大盤20、價格技術20、成交量15、相對強度15、籌碼／選擇權15、估值／基本面15。
+        選擇權為 Yahoo 公開鏈彙總；滑鼠停留可查看最大合約、量／OI、權利金、成交側與 IV。
+        公開資料無法可靠辨識 sweep、block、spread 或複合部位時，系統不做方向臆測。13F、機構持股及 short 資料具有時滯。
+    </div>
+</div>
+
+<!-- TABLE -->
+<div class="table-section portfolio-tab-panel" id="holdings-panel" role="tabpanel" aria-labelledby="holdings-tab">
     <div class="table-wrapper">
         <table>
             <thead>
@@ -2133,8 +3006,7 @@ TEMPLATE = r"""<!doctype html>
 </div>
 
 <!-- WATCHLIST -->
-<div class="table-section" style="margin-bottom: 40px;">
-    <div class="table-header">Watchlist Alerts · 觀察名單預警</div>
+<div class="table-section portfolio-tab-panel" id="watchlist-panel" role="tabpanel" aria-labelledby="watchlist-tab" style="margin-bottom: 40px;" hidden>
     <div class="table-wrapper">
         <table>
             <thead>
@@ -2176,10 +3048,50 @@ TEMPLATE = r"""<!doctype html>
 </div>
 
 <footer>
-    資料來源：Yahoo Finance · 僅供個人追蹤參考，不構成任何投資建議
+    資料來源：Yahoo Finance · Nasdaq Economic Calendar · 僅供個人追蹤參考，不構成任何投資建議
 </footer>
 
 <script>
+const portfolioTabs = Array.from(document.querySelectorAll('.portfolio-tab'));
+const portfolioTabPanels = Array.from(document.querySelectorAll('.portfolio-tab-panel'));
+
+function activatePortfolioTab(tab, moveFocus = false) {
+    const targetId = tab.dataset.tabTarget;
+    portfolioTabs.forEach(function (item) {
+        const selected = item === tab;
+        item.classList.toggle('is-active', selected);
+        item.setAttribute('aria-selected', selected ? 'true' : 'false');
+        item.tabIndex = selected ? 0 : -1;
+    });
+    portfolioTabPanels.forEach(function (panel) {
+        panel.hidden = panel.id !== targetId;
+    });
+    if (moveFocus) tab.focus();
+}
+
+portfolioTabs.forEach(function (tab, index) {
+    tab.addEventListener('click', function () {
+        activatePortfolioTab(tab);
+    });
+    tab.addEventListener('keydown', function (event) {
+        let nextIndex = null;
+        if (event.key === 'ArrowRight') nextIndex = (index + 1) % portfolioTabs.length;
+        if (event.key === 'ArrowLeft') nextIndex = (index - 1 + portfolioTabs.length) % portfolioTabs.length;
+        if (event.key === 'Home') nextIndex = 0;
+        if (event.key === 'End') nextIndex = portfolioTabs.length - 1;
+        if (nextIndex !== null) {
+            event.preventDefault();
+            activatePortfolioTab(portfolioTabs[nextIndex], true);
+        }
+    });
+});
+
+const hashTarget = window.location.hash.slice(1);
+const hashTab = portfolioTabs.find(function (tab) {
+    return tab.dataset.tabTarget === hashTarget;
+});
+if (hashTab) activatePortfolioTab(hashTab);
+
 const fearGreedLabels = {{ fear_greed_chart_labels | safe }};
 const fearGreedData = {{ fear_greed_chart_data | safe }};
 
