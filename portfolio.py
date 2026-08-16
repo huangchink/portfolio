@@ -39,43 +39,58 @@ except Exception as e:
 EXCLUDED_ETFS_US = set()
 
 FULL_PORTFOLIO = [
-    {"symbol": "TSM",   "shares": 32,        "cost": 388},
-    {"symbol": "SNPS",  "shares": 11,         "cost": 483.154},
-    {"symbol": "YUM",   "shares": 1,         "cost": 141.34},
-    {"symbol": "UNH",   "shares": 15,        "cost": 310.86},
-    {"symbol": "GOOGL", "shares": 80.47318,  "cost": 185.028},
-    {"symbol": "NVDA",  "shares": 79.22095,   "cost": 164.7258},
-    {"symbol": "QCOM",  "shares": 5,        "cost": 159.926},
-    {"symbol": "MSFT",  "shares": 3,         "cost": 371.9533},
-    {"symbol": "MU",    "shares": 12,        "cost": 367.1426},
-    {"symbol": "SNDK",    "shares": 2,        "cost": 1656.41},
-    {"symbol": "AAPL",  "shares":1,         "cost": 281.22},
-
-    {"symbol": "KO",    "shares": 206.47431,  "cost": 76.722},
+    {"symbol": "AAPL",  "shares": 3,         "cost": 288.9},
     {"symbol": "AEP",   "shares": 15,        "cost": 105.216},
-    {"symbol": "DUK",   "shares": 16,        "cost": 115.79375},
-    {"symbol": "AXP",   "shares": 8,        "cost": 304.8725},
-    # {"symbol": "CVX",   "shares": 5,        "cost": 188.03},
-    # {"symbol": "EQT",   "shares": 10,        "cost": 57.093},
-    {"symbol": "GEV",   "shares": 3,        "cost": 976.956667},
-    # {"symbol": "BRK/B",   "shares": 7,        "cost": 484.713},
-
-    {"symbol": "INTC",   "shares": 30,        "cost": 114.246},
-    {"symbol": "META",   "shares": 1,        "cost": 567.49},
-
-    {"symbol": "V",   "shares": 5,        "cost": 310.006},
-    {"symbol": "MCD",   "shares": 30,        "cost": 278.88},
-    {"symbol": "CEG",   "shares": 27,        "cost":292.848},
-    {"symbol": "LEU",   "shares": 18,        "cost": 265.216},
     {"symbol": "AMZN",  "shares": 18,        "cost": 220.786667},
-    # {"symbol": "ETN",   "shares": 2,         "cost": 402.28},
-    {"symbol": "HUBB",  "shares": 9,         "cost": 443.946667},
-    # {"symbol": "FSLR",  "shares": 1,         "cost": 241.83},
-    {"symbol": "VST",   "shares": 16,        "cost": 159},
-    {"symbol": "TSLA",  "shares": 2,   "cost": 420},
-    {"symbol": "SIMO",  "shares": 1,   "cost": 273.38},
-    {"symbol": "CDNS",   "shares": 2,        "cost": 390.605},
+    {"symbol": "AXP",   "shares": 8,         "cost": 304.8725},
+    # {"symbol": "BRK/B", "shares": 7,         "cost": 484.713},
+    {"symbol": "CDNS",  "shares": 2,         "cost": 390.605},
+    {"symbol": "CEG",   "shares": 27,        "cost": 292.848},
+    {"symbol": "COST",   "shares": 3,        "cost": 950},
 
+    # {"symbol": "CVX",   "shares": 5,        "cost": 188.03},
+     {"symbol": "DIS",   "shares": 5,        "cost": 98.282},
+   
+    {"symbol": "DUK",   "shares": 16,        "cost": 115.79375},
+    # {"symbol": "EQT",   "shares": 10,       "cost": 57.093},
+    # {"symbol": "ETN",   "shares": 2,         "cost": 402.28},
+    # {"symbol": "FSLR",  "shares": 1,         "cost": 241.83},
+    # {"symbol": "GEV",   "shares": 3,         "cost": 976.956667},
+    {"symbol": "GOOGL", "shares": 80.47318,  "cost": 185.028},
+    {"symbol": "HUBB",  "shares": 9,         "cost": 443.946667},
+        {"symbol": "HIMX",   "shares": 3,        "cost": 13.06},
+
+    {"symbol": "INTC",  "shares": 30,        "cost": 114.246},
+
+     {"symbol": "JNJ",  "shares": 1,        "cost": 249.97},
+   
+    {"symbol": "KO",    "shares": 206.47431, "cost": 76.722},
+    {"symbol": "LEU",   "shares": 18,        "cost": 265.216},
+    {"symbol": "LULU",   "shares": 1,        "cost": 118.39},
+
+
+    {"symbol": "MCD",   "shares": 12,        "cost": 271.79},
+    {"symbol": "META",  "shares": 1,         "cost": 567.49},
+    {"symbol": "MSFT",  "shares": 1,         "cost": 397.17},
+    {"symbol": "MU",    "shares": 12,        "cost": 367.1426},
+    {"symbol": "NVDA",  "shares": 79.22095,  "cost": 164.7258},
+    {"symbol": "NFLX",  "shares": 3,  "cost": 73.28},
+
+    {"symbol": "PEP",  "shares": 5,         "cost": 136.218},
+
+    {"symbol": "QCOM",  "shares": 1,         "cost": 208.67},
+    {"symbol": "SIMO",  "shares": 1,         "cost": 273.38},
+    {"symbol": "SNDK",  "shares": 5,         "cost": 1335.1},
+    {"symbol": "SNPS",  "shares": 11,        "cost": 483.154},
+    {"symbol": "TSLA",  "shares": 2,         "cost": 420},
+    {"symbol": "TSM",   "shares": 50,        "cost": 411.69},
+    {"symbol": "TPR",   "shares": 1,        "cost": 127.7},
+
+    {"symbol": "UNH",   "shares": 15,        "cost": 310.86},
+    {"symbol": "V",     "shares": 5,         "cost": 310.006},
+    {"symbol": "VST",   "shares": 11,        "cost": 146.69},
+
+    {"symbol": "YUM",   "shares": 2,         "cost": 144.73},
 ]
 
 WATCHLIST = [
@@ -2283,7 +2298,7 @@ TEMPLATE = r"""<!doctype html>
                 5. 美股估值過高，看好低本益比的亞太市場
             </div>
             <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light); font-weight: 700; font-size: 1.1rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; text-align: right;">
-                ==&gt; 持續買進 VPL
+                ==&gt; 持續買進 VPL or 台股009812
             </div>
         </div>
         <div class="macro-detail-item" style="display: flex; flex-direction: column; justify-content: space-between;">
