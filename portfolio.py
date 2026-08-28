@@ -46,7 +46,7 @@ FULL_PORTFOLIO = [
     # {"symbol": "BRK/B", "shares": 7,         "cost": 484.713},
     {"symbol": "CDNS",  "shares": 2,         "cost": 390.605},
     {"symbol": "CEG",   "shares": 27,        "cost": 292.848},
-    {"symbol": "COST",   "shares": 3,        "cost": 950},
+    # {"symbol": "COST",   "shares": 3,        "cost": 950},
 
     # {"symbol": "CVX",   "shares": 5,        "cost": 188.03},
      {"symbol": "DIS",   "shares": 5,        "cost": 98.282},
@@ -60,20 +60,20 @@ FULL_PORTFOLIO = [
     {"symbol": "HUBB",  "shares": 9,         "cost": 443.946667},
         {"symbol": "HIMX",   "shares": 3,        "cost": 13.06},
 
-    {"symbol": "INTC",  "shares": 30,        "cost": 114.246},
+    {"symbol": "INTC",  "shares": 57,        "cost": 104.4},
 
      {"symbol": "JNJ",  "shares": 1,        "cost": 249.97},
    
     {"symbol": "KO",    "shares": 206.47431, "cost": 76.722},
-    {"symbol": "LEU",   "shares": 18,        "cost": 265.216},
+    {"symbol": "LEU",   "shares": 8,        "cost": 165.216},
     {"symbol": "LULU",   "shares": 1,        "cost": 118.39},
 
 
-    {"symbol": "MCD",   "shares": 12,        "cost": 271.79},
+    {"symbol": "MCD",   "shares": 25,        "cost": 270.79},
     {"symbol": "META",  "shares": 1,         "cost": 567.49},
     {"symbol": "MSFT",  "shares": 1,         "cost": 397.17},
     {"symbol": "MU",    "shares": 12,        "cost": 367.1426},
-    {"symbol": "NVDA",  "shares": 79.22095,  "cost": 164.7258},
+    {"symbol": "NVDA",  "shares": 99.22095,  "cost": 172.4558},
     {"symbol": "NFLX",  "shares": 3,  "cost": 73.28},
 
     {"symbol": "PEP",  "shares": 5,         "cost": 136.218},
@@ -83,7 +83,7 @@ FULL_PORTFOLIO = [
     {"symbol": "SNDK",  "shares": 5,         "cost": 1335.1},
     {"symbol": "SNPS",  "shares": 11,        "cost": 483.154},
     {"symbol": "TSLA",  "shares": 2,         "cost": 420},
-    {"symbol": "TSM",   "shares": 50,        "cost": 411.69},
+    {"symbol": "TSM",   "shares": 60,        "cost": 412.82},
     {"symbol": "TPR",   "shares": 1,        "cost": 127.7},
 
     {"symbol": "UNH",   "shares": 15,        "cost": 310.86},

@@ -10,6 +10,9 @@ __pycache__/
 .yf-cache/
 .pytest_cache/
 
+# Generated strategy/backtest reports
+quant_reports/
+
 # Local environment
 .env
 .venv/
