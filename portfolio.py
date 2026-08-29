@@ -83,7 +83,7 @@ FULL_PORTFOLIO = [
     {"symbol": "SNDK",  "shares": 5,         "cost": 1335.1},
     {"symbol": "SNPS",  "shares": 11,        "cost": 483.154},
     {"symbol": "TSLA",  "shares": 2,         "cost": 420},
-    {"symbol": "TSM",   "shares": 60,        "cost": 412.82},
+    {"symbol": "TSM",   "shares": 75,        "cost": 415.82},
     {"symbol": "TPR",   "shares": 1,        "cost": 127.7},
 
     {"symbol": "UNH",   "shares": 15,        "cost": 310.86},
