@@ -44,11 +44,11 @@ FULL_PORTFOLIO = [
     {"symbol": "AMZN",  "shares": 18,        "cost": 220.786667},
     {"symbol": "AXP",   "shares": 8,         "cost": 304.8725},
     # {"symbol": "BRK/B", "shares": 7,         "cost": 484.713},
-    {"symbol": "CDNS",  "shares": 2,         "cost": 390.605},
-    {"symbol": "CEG",   "shares": 27,        "cost": 292.848},
+    {"symbol": "CDNS",  "shares": 7,         "cost": 329.147},
+    {"symbol": "CEG",   "shares": 28,        "cost": 290.96},
     # {"symbol": "COST",   "shares": 3,        "cost": 950},
 
-    # {"symbol": "CVX",   "shares": 5,        "cost": 188.03},
+    {"symbol": "CVX",   "shares": 3,        "cost": 196.3266},
      {"symbol": "DIS",   "shares": 5,        "cost": 98.282},
    
     {"symbol": "DUK",   "shares": 16,        "cost": 115.79375},
@@ -66,7 +66,7 @@ FULL_PORTFOLIO = [
    
     {"symbol": "KO",    "shares": 206.47431, "cost": 76.722},
     {"symbol": "LEU",   "shares": 8,        "cost": 165.216},
-    {"symbol": "LULU",   "shares": 1,        "cost": 118.39},
+    {"symbol": "LULU",   "shares": 2,        "cost": 108.735},
 
 
     {"symbol": "MCD",   "shares": 25,        "cost": 270.79},
@@ -79,9 +79,9 @@ FULL_PORTFOLIO = [
     {"symbol": "PEP",  "shares": 5,         "cost": 136.218},
 
     {"symbol": "QCOM",  "shares": 1,         "cost": 208.67},
-    {"symbol": "SIMO",  "shares": 1,         "cost": 273.38},
+    {"symbol": "SIMO",  "shares": 4,         "cost": 252.7225},
     {"symbol": "SNDK",  "shares": 5,         "cost": 1335.1},
-    {"symbol": "SNPS",  "shares": 11,        "cost": 483.154},
+    {"symbol": "SNPS",  "shares": 13,        "cost": 467.177},
     {"symbol": "TSLA",  "shares": 2,         "cost": 420},
     {"symbol": "TSM",   "shares": 75,        "cost": 415.82},
     {"symbol": "TPR",   "shares": 1,        "cost": 127.7},
