@@ -88,6 +88,35 @@ button { color: inherit; }
   letter-spacing: 0.14em;
 }
 
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  margin-right: 20px;
+}
+
+.nav-link {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: 500 11px var(--mono);
+  text-decoration: none;
+  transition: all 140ms ease;
+}
+
+.nav-link:hover {
+  background: var(--ink);
+  color: var(--acid);
+}
+
+.nav-link--active {
+  background: var(--ink);
+  color: var(--acid);
+  font-weight: 700;
+}
+
 .market-status {
   display: flex;
   gap: 9px;

@@ -2254,9 +2254,15 @@ TEMPLATE = r"""<!doctype html>
         <div class="site-title">Chink Portfolio</div>
         <div class="site-subtitle">Investment Watchlist · 自選股追蹤</div>
     </div>
-    <div class="meta-time">
-        <strong>Last Updated</strong>
-        {{ updated_at_tw }} 台北時間
+    <div style="display: flex; align-items: center; gap: 16px;">
+        <nav style="display: flex; gap: 8px;">
+            <a href="index.html" style="padding: 6px 12px; background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue); border-radius: 4px; font-family: 'Noto Sans TC', sans-serif; font-size: 0.78rem; font-weight: 700; text-decoration: none;">📈 持倉追蹤總覽</a>
+            <a href="fundamentals.html" style="padding: 6px 12px; background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid var(--border); border-radius: 4px; font-family: 'Noto Sans TC', sans-serif; font-size: 0.78rem; font-weight: 500; text-decoration: none;">📊 基本面決策台 ↗</a>
+        </nav>
+        <div class="meta-time">
+            <strong>Last Updated</strong>
+            {{ updated_at_tw }} 台北時間
+        </div>
     </div>
 </header>
 

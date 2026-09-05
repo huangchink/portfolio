@@ -1,4 +1,4 @@
-﻿name: Deploy to GitHub Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
@@ -27,8 +27,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Generate portfolio dashboard
+        run: python portfolio.py --output docs/index.html
+
       - name: Generate fundamentals dashboard
-        run: python fundamentals_app.py --output docs/index.html --workers 3
+        run: python fundamentals_app.py --output docs/fundamentals.html --workers 3
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
