@@ -423,8 +423,8 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-def write_static_site(output_path: Path) -> None:
-    data = build_dashboard_data()
+def write_static_site(output_path: Path, data: dict[str, Any] | None = None) -> None:
+    data = data or build_dashboard_data()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with app.app_context():
         output_path.write_text(
@@ -437,35 +437,39 @@ def write_static_site(output_path: Path) -> None:
     print(f"Wrote fundamentals dashboard to {output_path}")
 
 
+def write_sites_dist(max_workers: int = 4) -> None:
+    data = build_dashboard_data(max_workers=max_workers)
+    write_static_site(PROJECT_ROOT / "dist" / "client" / "index.html", data=data)
+    server_dir = PROJECT_ROOT / "dist" / "server"
+    server_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(PROJECT_ROOT / "worker" / "index.js", server_dir / "index.js")
+    print(f"Wrote Sites worker to {server_dir / 'index.js'}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Portfolio fundamentals dashboard")
-    parser.add_argument("--output", type=Path, help="Generate a static site snapshot")
+    output_group = parser.add_mutually_exclusive_group()
+    output_group.add_argument("--output", type=Path, help="Generate a static site snapshot")
+    output_group.add_argument(
+        "--sites-dist", action="store_true", help="Generate the private Sites bundle"
+    )
     parser.add_argument("--serve", action="store_true", help="Run the Flask server")
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 5000)))
     parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
 
     if args.output:
-        # Keep worker count configurable for CI environments with stricter rate limits.
-        original_builder = build_dashboard_data
-        if args.workers != 4:
-            data = original_builder(max_workers=max(1, args.workers))
-            args.output.parent.mkdir(parents=True, exist_ok=True)
-            with app.app_context():
-                args.output.write_text(
-                    render_dashboard(data=data, asset_prefix="assets"), encoding="utf-8"
-                )
-            asset_dir = args.output.parent / "assets"
-            asset_dir.mkdir(parents=True, exist_ok=True)
-            for name in ("dashboard.css", "dashboard.js", "og.png"):
-                shutil.copy2(PROJECT_ROOT / "static" / name, asset_dir / name)
-            print(f"Wrote fundamentals dashboard to {args.output}")
-        else:
-            write_static_site(args.output)
+        data = build_dashboard_data(max_workers=max(1, args.workers))
+        write_static_site(args.output, data=data)
         if not args.serve:
             return
 
-    if args.serve or not args.output:
+    if args.sites_dist:
+        write_sites_dist(max_workers=max(1, args.workers))
+        if not args.serve:
+            return
+
+    if args.serve or (not args.output and not args.sites_dist):
         app.run(host="0.0.0.0", port=args.port, debug=False)
 
 
