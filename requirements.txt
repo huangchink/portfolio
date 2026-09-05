@@ -2,3 +2,4 @@ flask
 yfinance
 gunicorn
 pytz
+pandas

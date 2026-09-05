@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07110f">
+  <meta name="description" content="個人投資組合基本面分析：P/E、Forward P/E、ROE、持倉 ROI、股票回購與歷史高點距離。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Fundamentals Desk｜投資組合基本面分析">
+  <meta property="og:description" content="不追逐雜訊，只看企業的底。用估值、ROE、持倉 ROI、回購與 ATH 距離研究投資組合。">
+  <meta property="og:image" content="{{ og_image_url }}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Fundamentals Desk｜投資組合基本面分析">
+  <meta name="twitter:description" content="不追逐雜訊，只看企業的底。">
+  <meta name="twitter:image" content="{{ og_image_url }}">
+  <title>Fundamentals Desk｜投資組合基本面分析</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ asset_prefix }}/dashboard.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="Fundamentals Desk 首頁">
+        <span class="brand-mark">FD</span>
+        <span>
+          <strong>Fundamentals Desk</strong>
+          <small>PERSONAL EQUITY RESEARCH</small>
+        </span>
+      </a>
+      <div class="market-status" title="資料由每日排程產生">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>最近更新</span>
+        <time>{{ dashboard.generated_at }}</time>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="page-title">
+        <div class="hero-copy">
+          <p class="eyebrow"><span>PORTFOLIO / 01</span> 基本面決策台</p>
+          <h1 id="page-title">不追逐雜訊，<br><em>只看企業的底。</em></h1>
+          <p class="hero-description">
+            將估值、獲利品質、資本配置與你的真實持倉成本放在同一張圖上，快速辨識值得深入研究的部位。
+          </p>
+        </div>
+        <div class="hero-aside">
+          <div class="hero-number">
+            <span>追蹤部位</span>
+            <strong>{{ "%02d"|format(dashboard.summary.holdings_count) }}</strong>
+            <small>美股 / ADR</small>
+          </div>
+          <p>資料來源 Yahoo Finance。數據僅供研究，不構成投資建議。</p>
+        </div>
+      </section>
+
+      <section class="summary-grid" aria-label="投資組合摘要">
+        <article class="metric-card metric-card--primary">
+          <span class="metric-index">01</span>
+          <p>投資組合市值</p>
+          <strong data-money="{{ dashboard.summary.total_market_value if dashboard.summary.total_market_value is not none else '' }}">
+            {% if dashboard.summary.total_market_value is not none %}${{ "{:,.0f}".format(dashboard.summary.total_market_value) }}{% else %}—{% endif %}
+          </strong>
+          <small>成本 ${{ "{:,.0f}".format(dashboard.summary.total_cost) }}</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-index">02</span>
+          <p>持倉總 ROI</p>
+          <strong class="{{ 'positive' if dashboard.summary.total_roi is not none and dashboard.summary.total_roi >= 0 else 'negative' }}">
+            {% if dashboard.summary.total_roi is not none %}{{ "%+.1f"|format(dashboard.summary.total_roi) }}%{% else %}—{% endif %}
+          </strong>
+          <small>現價相對加權成本</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-index">03</span>
+          <p>Forward P/E 中位數</p>
+          <strong>{% if dashboard.summary.median_forward_pe is not none %}{{ "%.1f"|format(dashboard.summary.median_forward_pe) }}×{% else %}—{% endif %}</strong>
+          <small>降低極端值干擾</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-index">04</span>
+          <p>加權 ROE</p>
+          <strong>{% if dashboard.summary.weighted_roe is not none %}{{ "%.1f"|format(dashboard.summary.weighted_roe) }}%{% else %}—{% endif %}</strong>
+          <small>依持倉市值加權</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-index">05</span>
+          <p>最近四季有回購</p>
+          <strong>{{ "%02d"|format(dashboard.summary.buyback_count) }}</strong>
+          <small>/ {{ dashboard.summary.holdings_count }} 檔持股</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-index">06</span>
+          <p>距 ATH 10% 內</p>
+          <strong>{{ "%02d"|format(dashboard.summary.near_ath_count) }}</strong>
+          <small>強勢區間觀察</small>
+        </article>
+      </section>
+
+      <section class="research-grid">
+        <article class="panel valuation-map-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow"><span>MAP / 02</span> 品質估值地圖</p>
+              <h2>Forward P/E × ROE</h2>
+            </div>
+            <p>圓點大小代表持倉權重。點選代號查看個股分析。</p>
+          </div>
+          <div class="valuation-map" id="valuationMap" aria-label="Forward P/E 與 ROE 分布圖">
+            <span class="axis-label axis-label--y">ROE 高</span>
+            <span class="axis-label axis-label--x">估值高 →</span>
+            <div class="quadrant quadrant--quality">QUALITY</div>
+            <div class="quadrant quadrant--premium">PREMIUM</div>
+            <div class="quadrant quadrant--value">VALUE</div>
+            <div class="quadrant quadrant--watch">WATCH</div>
+            <div class="map-empty" id="mapEmpty" hidden>目前沒有足夠的 P/E 與 ROE 資料</div>
+          </div>
+          <div class="map-scale" aria-hidden="true"><span>0×</span><span>20×</span><span>40×</span><span>60×+</span></div>
+        </article>
+
+        <aside class="panel allocation-panel">
+          <div class="section-heading section-heading--compact">
+            <div>
+              <p class="eyebrow"><span>MIX / 03</span> 產業曝險</p>
+              <h2>資金分布</h2>
+            </div>
+          </div>
+          <div class="allocation-bar" aria-label="產業持倉比例">
+            {% for sector in dashboard.sector_mix[:7] %}
+            <span style="--size: {{ sector.weight }}%" title="{{ sector.name }} {{ '%.1f'|format(sector.weight) }}%"></span>
+            {% endfor %}
+          </div>
+          <ol class="allocation-list">
+            {% for sector in dashboard.sector_mix[:7] %}
+            <li>
+              <span class="allocation-rank">{{ "%02d"|format(loop.index) }}</span>
+              <span class="allocation-name">{{ sector.name }}</span>
+              <span class="allocation-track"><i style="--width: {{ sector.weight }}%"></i></span>
+              <strong>{{ "%.1f"|format(sector.weight) }}%</strong>
+            </li>
+            {% endfor %}
+          </ol>
+        </aside>
+      </section>
+
+      <section class="holdings-section" aria-labelledby="holdings-title">
+        <div class="section-heading holdings-heading">
+          <div>
+            <p class="eyebrow"><span>HOLDINGS / 04</span> 全部持股</p>
+            <h2 id="holdings-title">基本面掃描</h2>
+          </div>
+          <p><strong id="resultCount">{{ dashboard.summary.holdings_count }}</strong> / {{ dashboard.summary.holdings_count }} 檔符合條件</p>
+        </div>
+
+        <div class="toolbar" aria-label="持股篩選工具">
+          <label class="search-box">
+            <span class="visually-hidden">搜尋股票</span>
+            <span aria-hidden="true">⌕</span>
+            <input id="searchInput" type="search" placeholder="搜尋代號或公司名稱" autocomplete="off">
+            <kbd>/</kbd>
+          </label>
+          <label class="select-wrap">
+            <span class="visually-hidden">產業篩選</span>
+            <select id="sectorFilter">
+              <option value="all">全部產業</option>
+              {% for sector in dashboard.sector_mix %}
+              <option value="{{ sector.name }}">{{ sector.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="select-wrap">
+            <span class="visually-hidden">排序方式</span>
+            <select id="sortSelect">
+              <option value="weight-desc">持倉權重：高至低</option>
+              <option value="forwardPe-asc">Forward P/E：低至高</option>
+              <option value="roe-desc">ROE：高至低</option>
+              <option value="roi-desc">ROI：高至低</option>
+              <option value="ath-desc">最接近 ATH</option>
+            </select>
+          </label>
+          <button class="filter-button" id="buybackFilter" type="button" aria-pressed="false">有回購</button>
+          <button class="filter-button" id="athFilter" type="button" aria-pressed="false">ATH 10% 內</button>
+          <button class="export-button" id="exportButton" type="button">匯出 CSV <span>↗</span></button>
+        </div>
+
+        <div class="table-frame">
+          <table class="holdings-table">
+            <thead>
+              <tr>
+                <th scope="col">公司</th>
+                <th scope="col">現價 / 權重</th>
+                <th scope="col" title="過去十二個月本益比">P/E <span>TTM</span></th>
+                <th scope="col" title="市場預估未來十二個月本益比">Forward P/E</th>
+                <th scope="col" title="股東權益報酬率">ROE</th>
+                <th scope="col" title="現價相對你的平均成本報酬率">持倉 ROI</th>
+                <th scope="col" title="最近四季現金流是否揭露買回股票">股票回購</th>
+                <th scope="col" title="現價距離拆股調整後歷史最高價">距 ATH</th>
+                <th scope="col"><span class="visually-hidden">開啟分析</span></th>
+              </tr>
+            </thead>
+            <tbody id="holdingsBody">
+              {% for item in dashboard["items"] %}
+              <tr data-symbol="{{ item.symbol }}"
+                  data-name="{{ item.name|e }}"
+                  data-sector="{{ item.sector|e }}"
+                  data-weight="{{ item.portfolio_weight if item.portfolio_weight is not none else '' }}"
+                  data-forward-pe="{{ item.forward_pe if item.forward_pe is not none else '' }}"
+                  data-roe="{{ item.roe if item.roe is not none else '' }}"
+                  data-roi="{{ item.roi if item.roi is not none else '' }}"
+                  data-ath="{{ item.ath_distance if item.ath_distance is not none else '' }}"
+                  data-buyback="{{ 'true' if item.is_buying_back else 'false' }}">
+                <td>
+                  <button class="company-cell" type="button" data-open-symbol="{{ item.symbol }}">
+                    <span class="ticker-avatar">{{ item.symbol[:2] }}</span>
+                    <span><strong>{{ item.symbol }}</strong><small>{{ item.name }}</small></span>
+                  </button>
+                </td>
+                <td>
+                  {% if item.price is not none %}<strong class="cell-primary">${{ "{:,.2f}".format(item.price) }}</strong>{% else %}<strong class="cell-primary">—</strong>{% endif %}
+                  <small class="cell-secondary">{% if item.portfolio_weight is not none %}{{ "%.1f"|format(item.portfolio_weight) }}%{% else %}—{% endif %}</small>
+                </td>
+                <td data-label="P/E">
+                  <strong class="cell-primary">{% if item.trailing_pe is not none %}{{ "%.1f"|format(item.trailing_pe) }}×{% else %}—{% endif %}</strong>
+                </td>
+                <td data-label="Forward P/E">
+                  <strong class="cell-primary">{% if item.forward_pe is not none %}{{ "%.1f"|format(item.forward_pe) }}×{% else %}—{% endif %}</strong>
+                  {% if item.trailing_pe is not none and item.forward_pe is not none %}
+                  <small class="cell-secondary {{ 'positive' if item.forward_pe < item.trailing_pe else 'negative' }}">
+                    {{ "%+.1f"|format((item.forward_pe / item.trailing_pe - 1) * 100) }}%
+                  </small>
+                  {% endif %}
+                </td>
+                <td data-label="ROE">
+                  <strong class="cell-primary {{ 'positive' if item.roe is not none and item.roe >= 15 else 'negative' if item.roe is not none and item.roe < 0 else '' }}">
+                    {% if item.roe is not none %}{{ "%.1f"|format(item.roe) }}%{% else %}—{% endif %}
+                  </strong>
+                </td>
+                <td data-label="持倉 ROI">
+                  <strong class="cell-primary {{ 'positive' if item.roi is not none and item.roi >= 0 else 'negative' }}">
+                    {% if item.roi is not none %}{{ "%+.1f"|format(item.roi) }}%{% else %}—{% endif %}
+                  </strong>
+                  <small class="cell-secondary">成本 ${{ "{:,.2f}".format(item.cost) }}</small>
+                </td>
+                <td data-label="股票回購">
+                  {% if item.is_buying_back is true %}
+                  <span class="status-pill status-pill--yes"><i></i>進行中</span>
+                  {% elif item.is_buying_back is false %}
+                  <span class="status-pill status-pill--no">未進行</span>
+                  {% else %}
+                  <span class="status-pill status-pill--unknown">未揭露</span>
+                  {% endif %}
+                </td>
+                <td data-label="距 ATH">
+                  {% if item.ath_distance is not none %}
+                  <strong class="cell-primary {{ 'positive' if item.ath_distance >= -10 else '' }}">{{ "%.1f"|format(item.ath_distance) }}%</strong>
+                  <span class="ath-track"><i style="--progress: {{ [100 + item.ath_distance, 0]|max }}%"></i></span>
+                  {% else %}<strong class="cell-primary">—</strong>{% endif %}
+                </td>
+                <td><button class="row-action" type="button" data-open-symbol="{{ item.symbol }}" aria-label="查看 {{ item.symbol }} 分析">↗</button></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <div class="empty-state" id="emptyState" hidden>
+            <strong>沒有符合條件的持股</strong>
+            <p>試著清除部分篩選條件。</p>
+            <button type="button" id="clearFilters">清除篩選</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="methodology" aria-labelledby="methodology-title">
+        <div>
+          <p class="eyebrow"><span>NOTES / 05</span> 指標定義</p>
+          <h2 id="methodology-title">讀數之前，先看口徑。</h2>
+        </div>
+        <dl>
+          <div><dt>ROI</dt><dd>（目前股價 ÷ 你的平均成本 − 1），未計入股息、稅費與匯率。</dd></div>
+          <div><dt>ROE</dt><dd>最近十二個月淨利相對平均股東權益。負權益或一次性損益可能造成極端值。</dd></div>
+          <div><dt>股票回購</dt><dd>最近四個已揭露季度的現金流量表中，存在股票買回現金支出即標記為進行中。</dd></div>
+          <div><dt>距 ATH</dt><dd>現價相對拆股與股利調整後完整可得歷史最高價的差距。</dd></div>
+        </dl>
+      </section>
+    </main>
+
+    <footer>
+      <span>FUNDAMENTALS DESK</span>
+      <p>Research first. Decide second.</p>
+      <a href="#top">回到頂端 ↑</a>
+    </footer>
+  </div>
+
+  <dialog class="stock-dialog" id="stockDialog" aria-labelledby="dialogTitle">
+    <div class="dialog-layout">
+      <div class="dialog-rail">
+        <span class="dialog-monogram" id="dialogMonogram">AA</span>
+        <span>個股研究摘要</span>
+      </div>
+      <div class="dialog-content">
+        <button class="dialog-close" id="dialogClose" type="button" aria-label="關閉">×</button>
+        <p class="eyebrow"><span>DEEP DIVE</span> FUNDAMENTALS</p>
+        <div class="dialog-title-row">
+          <div><h2 id="dialogTitle">—</h2><p id="dialogName">—</p></div>
+          <span class="thesis-badge" id="dialogLabel">—</span>
+        </div>
+        <div class="dialog-price-row">
+          <strong id="dialogPrice">—</strong>
+          <span id="dialogRoi">—</span>
+        </div>
+        <div class="dialog-metrics" id="dialogMetrics"></div>
+        <div class="dialog-commentary">
+          <h3>快速判讀</h3>
+          <p id="dialogCommentary">—</p>
+        </div>
+        <div class="dialog-position" id="dialogPosition"></div>
+        <a class="yahoo-link" id="dialogLink" href="#" target="_blank" rel="noopener noreferrer">前往 Yahoo Finance 查看原始資料 <span>↗</span></a>
+      </div>
+    </div>
+  </dialog>
+
+  <script>window.__PORTFOLIO_DATA__ = {{ dashboard|tojson }};</script>
+  <script src="{{ asset_prefix }}/dashboard.js" defer></script>
+</body>
+</html>

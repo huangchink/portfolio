@@ -5,6 +5,10 @@ total_assets.py
 # Python caches
 __pycache__/
 *.py[cod]
+.cache/
+.cache-yfinance/
+.yfinance-cache/
+.yf_cache/
 
 # App/runtime caches
 .yf-cache/
@@ -17,6 +21,9 @@ quant_reports/
 .env
 .venv/
 venv/
+
+# Generated static site (created by GitHub Actions)
+docs/
 
 # OS/editor noise
 .DS_Store
