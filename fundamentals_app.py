@@ -15,6 +15,7 @@ import json
 import logging
 import math
 import os
+import re
 import shutil
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -23,7 +24,9 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import requests
 import yfinance as yf
+from bs4 import BeautifulSoup
 from flask import Flask, render_template
 from pytz import timezone
 
@@ -98,6 +101,126 @@ SECTOR_NAMES = {
     "Real Estate": "房地產",
 }
 
+SEC_HEADERS = {
+    "User-Agent": "FundamentalsDesk/1.0 https://fundamentals-desk-portfolio.stu1010614.chatgpt.site",
+    "Accept-Encoding": "gzip, deflate",
+}
+
+
+def _fetch_sec_cik_map() -> dict[str, int]:
+    try:
+        response = requests.get(
+            "https://www.sec.gov/files/company_tickers.json",
+            headers=SEC_HEADERS,
+            timeout=20,
+        )
+        response.raise_for_status()
+        return {
+            str(entry["ticker"]).upper(): int(entry["cik_str"])
+            for entry in response.json().values()
+        }
+    except Exception as exc:
+        logging.warning("SEC ticker map unavailable: %s", exc)
+        return {}
+
+
+def _money_from_match(value: str, unit: str) -> float:
+    multiplier = 1_000_000_000 if unit.lower().startswith("b") else 1_000_000
+    return float(value.replace(",", "")) * multiplier
+
+
+def _fetch_buyback_program(cik: int | None) -> dict[str, Any]:
+    """Extract the latest stated repurchase authorization from an SEC filing."""
+    fallback = {
+        "authorized_amount": None,
+        "expiry": "最新財報未明確揭露",
+        "form": None,
+        "filed": None,
+        "source_url": None,
+    }
+    if cik is None:
+        return fallback
+    try:
+        cik_text = f"{cik:010d}"
+        submissions = requests.get(
+            f"https://data.sec.gov/submissions/CIK{cik_text}.json",
+            headers=SEC_HEADERS,
+            timeout=20,
+        )
+        submissions.raise_for_status()
+        recent = submissions.json()["filings"]["recent"]
+        filing = next(
+            (
+                {"accession": accession, "document": document, "filed": filed, "form": form}
+                for accession, document, filed, form in zip(
+                    recent["accessionNumber"],
+                    recent["primaryDocument"],
+                    recent["filingDate"],
+                    recent["form"],
+                )
+                if form in {"10-Q", "10-K", "20-F", "40-F"}
+            ),
+            None,
+        )
+        if not filing:
+            return fallback
+        accession_plain = filing["accession"].replace("-", "")
+        source_url = (
+            f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_plain}/"
+            f"{filing['document']}"
+        )
+        document = requests.get(source_url, headers=SEC_HEADERS, timeout=25)
+        document.raise_for_status()
+        text = " ".join(BeautifulSoup(document.text, "html.parser").get_text(" ").split())
+
+        money = r"\$\s*([0-9][0-9,.]*(?:\.[0-9]+)?)\s*(billion|million)"
+        patterns = [
+            rf"(?:announced|authorized|approved)[^.]{{0,240}}?(?:program|plan|authorization)[^.]{{0,160}}?(?:repurchase|purchase|buy back)[^.]{{0,120}}?{money}",
+            rf"(?:program|plan|authorization)[^.]{{0,180}}?(?:repurchase|buy back)[^.]{{0,140}}?(?:up to|aggregate amount of|totaling)[^.]{{0,30}}?{money}",
+            rf"(?:authorized|approved)[^.]{{0,180}}?{money}[^.]{{0,140}}?(?:repurchase|buyback|buy back)",
+        ]
+        matches = [
+            match
+            for pattern in patterns
+            for match in re.finditer(pattern, text, flags=re.IGNORECASE)
+        ]
+        authorized_amount = None
+        expiry = fallback["expiry"]
+        if matches:
+            latest_match = max(matches, key=lambda match: match.start())
+            authorized_amount = _money_from_match(
+                latest_match.group(1), latest_match.group(2)
+            )
+            context = text[
+                max(0, latest_match.start() - 450) : latest_match.end() + 1100
+            ]
+            if re.search(
+                r"(?:does not have|has no|without|no) (?:a )?(?:fixed )?expiration date",
+                context,
+                flags=re.IGNORECASE,
+            ):
+                expiry = "無固定期限"
+            else:
+                date_match = re.search(
+                    r"(?:expires?|expiration date (?:is|of))\s+(?:on\s+)?"
+                    r"([A-Z][a-z]+\s+\d{1,2},\s+\d{4}|[A-Z][a-z]+\s+\d{4}|\d{4})",
+                    context,
+                    flags=re.IGNORECASE,
+                )
+                if date_match:
+                    expiry = date_match.group(1)
+
+        return {
+            "authorized_amount": authorized_amount,
+            "expiry": expiry,
+            "form": filing["form"],
+            "filed": filing["filed"],
+            "source_url": source_url,
+        }
+    except Exception as exc:
+        logging.warning("SEC buyback program unavailable for CIK %s: %s", cik, exc)
+        return fallback
+
 
 def _safe_float(value: Any) -> float | None:
     try:
@@ -129,10 +252,17 @@ def _all_time_high(history: pd.DataFrame) -> float | None:
     return _positive_metric(values.max()) if not values.empty else None
 
 
-def _buyback_ttm(cashflow: pd.DataFrame) -> float | None:
-    """Return gross repurchases reported in the latest four available quarters."""
+def _buyback_activity(cashflow: pd.DataFrame) -> dict[str, Any]:
+    """Return repurchase cash outflow and the latest disclosure period."""
     if cashflow.empty:
-        return None
+        return {"amount": None, "period_end": None}
+    period_dates = pd.to_datetime(cashflow.columns, errors="coerce")
+    valid_period_dates = period_dates[~pd.isna(period_dates)]
+    period_end = (
+        max(valid_period_dates).strftime("%Y-%m-%d")
+        if len(valid_period_dates)
+        else None
+    )
     candidates = [
         index
         for index in cashflow.index
@@ -140,26 +270,31 @@ def _buyback_ttm(cashflow: pd.DataFrame) -> float | None:
         and ("stock" in str(index).lower() or "capital" in str(index).lower())
     ]
     if not candidates:
-        return 0.0
+        return {"amount": 0.0, "period_end": period_end}
     values = pd.to_numeric(cashflow.loc[candidates[0]], errors="coerce").dropna().iloc[:4]
     if values.empty:
-        return None
+        return {"amount": None, "period_end": period_end}
     # Yahoo reports repurchases as a negative cash-flow item. Positive values are
     # excluded because they normally represent reversals rather than cash spent.
     spent = float((-values[values < 0]).sum())
-    return spent if spent > 0 else 0.0
+    return {"amount": spent if spent > 0 else 0.0, "period_end": period_end}
 
 
-def _fundamental_label(roe: float | None, forward_pe: float | None) -> str:
-    if roe is None and forward_pe is None:
+def _buyback_ttm(cashflow: pd.DataFrame) -> float | None:
+    """Return gross repurchases reported in the latest four available quarters."""
+    return _buyback_activity(cashflow)["amount"]
+
+
+def _fundamental_label(roa: float | None, forward_pe: float | None) -> str:
+    if roa is None and forward_pe is None:
         return "資料待補"
-    if roe is not None and roe >= 20 and forward_pe is not None and forward_pe <= 30:
+    if roa is not None and roa >= 10 and forward_pe is not None and forward_pe <= 30:
         return "品質與估值兼具"
-    if roe is not None and roe >= 20:
-        return "高 ROE・估值偏高"
+    if roa is not None and roa >= 10:
+        return "高 ROA・估值偏高"
     if forward_pe is not None and forward_pe <= 20:
         return "估值具吸引力"
-    if roe is not None and roe < 0:
+    if roa is not None and roa < 0:
         return "獲利品質待改善"
     return "中性觀察"
 
@@ -180,10 +315,16 @@ def _empty_snapshot(position: dict[str, Any], error: str | None = None) -> dict[
         "roi": None,
         "trailing_pe": None,
         "forward_pe": None,
-        "roe": None,
+        "roa": None,
         "ath": None,
         "ath_distance": None,
         "buyback_ttm": None,
+        "buyback_period_end": None,
+        "buyback_authorized_amount": None,
+        "buyback_program_expiry": None,
+        "buyback_program_form": None,
+        "buyback_program_filed": None,
+        "buyback_program_source_url": None,
         "is_buying_back": None,
         "currency": "USD",
         "label": "資料待補",
@@ -193,7 +334,9 @@ def _empty_snapshot(position: dict[str, Any], error: str | None = None) -> dict[
     }
 
 
-def fetch_stock_snapshot(position: dict[str, Any]) -> dict[str, Any]:
+def fetch_stock_snapshot(
+    position: dict[str, Any], sec_cik: int | None = None
+) -> dict[str, Any]:
     """Fetch one holding while preserving partial data when a source is unavailable."""
     item = _empty_snapshot(position)
     ticker = yf.Ticker(position["symbol"])
@@ -214,10 +357,25 @@ def fetch_stock_snapshot(position: dict[str, Any]) -> dict[str, Any]:
 
     try:
         cashflow = ticker.get_cash_flow(freq="quarterly")
-        buyback = _buyback_ttm(cashflow)
+        buyback_activity = _buyback_activity(cashflow)
+        buyback = buyback_activity["amount"]
+        buyback_period_end = buyback_activity["period_end"]
     except Exception as exc:
         logging.warning("%s cash flow unavailable: %s", position["symbol"], exc)
         buyback = None
+        buyback_period_end = None
+
+    buyback_program = (
+        _fetch_buyback_program(sec_cik)
+        if buyback is not None and buyback > 0
+        else {
+            "authorized_amount": None,
+            "expiry": "—",
+            "form": None,
+            "filed": None,
+            "source_url": None,
+        }
+    )
 
     price = _latest_price(info, history)
     ath = _all_time_high(history)
@@ -228,8 +386,8 @@ def fetch_stock_snapshot(position: dict[str, Any]) -> dict[str, Any]:
     ath_distance = ((price / ath) - 1) * 100 if price is not None and ath else None
     trailing_pe = _positive_metric(info.get("trailingPE"))
     forward_pe = _positive_metric(info.get("forwardPE"))
-    roe_raw = _safe_float(info.get("returnOnEquity"))
-    roe = roe_raw * 100 if roe_raw is not None else None
+    roa_raw = _safe_float(info.get("returnOnAssets"))
+    roa = roa_raw * 100 if roa_raw is not None else None
 
     item.update(
         {
@@ -240,13 +398,19 @@ def fetch_stock_snapshot(position: dict[str, Any]) -> dict[str, Any]:
             "roi": roi,
             "trailing_pe": trailing_pe,
             "forward_pe": forward_pe,
-            "roe": roe,
+            "roa": roa,
             "ath": ath,
             "ath_distance": min(ath_distance, 0.0) if ath_distance is not None else None,
             "buyback_ttm": buyback,
+            "buyback_period_end": buyback_period_end,
+            "buyback_authorized_amount": buyback_program["authorized_amount"],
+            "buyback_program_expiry": buyback_program["expiry"],
+            "buyback_program_form": buyback_program["form"],
+            "buyback_program_filed": buyback_program["filed"],
+            "buyback_program_source_url": buyback_program["source_url"],
             "is_buying_back": buyback > 0 if buyback is not None else None,
             "currency": info.get("currency") or "USD",
-            "label": _fundamental_label(roe, forward_pe),
+            "label": _fundamental_label(roa, forward_pe),
             "data_status": "live" if price is not None else "partial",
             "error": None,
         }
@@ -313,11 +477,14 @@ def _weighted_average(
 
 def build_dashboard_data(max_workers: int = 4) -> dict[str, Any]:
     cached = _load_cache()
+    sec_cik_map = _fetch_sec_cik_map()
     fetched_by_symbol: dict[str, dict[str, Any]] = {}
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(fetch_stock_snapshot, position): position
+            executor.submit(
+                fetch_stock_snapshot, position, sec_cik_map.get(position["symbol"])
+            ): position
             for position in FULL_PORTFOLIO
         }
         for future in as_completed(futures):
@@ -383,7 +550,7 @@ def build_dashboard_data(max_workers: int = 4) -> dict[str, Any]:
             "total_cost": total_cost,
             "total_roi": total_roi,
             "median_forward_pe": median_forward_pe,
-            "weighted_roe": _weighted_average(items, "roe"),
+            "weighted_roa": _weighted_average(items, "roa"),
             "buyback_count": sum(item.get("is_buying_back") is True for item in items),
             "near_ath_count": sum(
                 item.get("ath_distance") is not None and item["ath_distance"] >= -10
@@ -392,7 +559,7 @@ def build_dashboard_data(max_workers: int = 4) -> dict[str, Any]:
             "coverage_count": sum(
                 item.get("trailing_pe") is not None
                 or item.get("forward_pe") is not None
-                or item.get("roe") is not None
+                or item.get("roa") is not None
                 for item in items
             ),
         },

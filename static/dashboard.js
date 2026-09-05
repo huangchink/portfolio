@@ -81,7 +81,7 @@
     const fieldMap = {
       weight: "weight",
       forwardPe: "forwardPe",
-      roe: "roe",
+      roa: "roa",
       roi: "roi",
       ath: "ath",
     };
@@ -142,26 +142,79 @@
     const empty = document.querySelector("#mapEmpty");
     if (!map) return;
     const valid = items.filter(
-      (item) => number(item.forward_pe) !== null && number(item.roe) !== null
+      (item) => number(item.forward_pe) !== null && number(item.roa) !== null
     );
     if (empty) empty.hidden = valid.length > 0;
 
     valid.forEach((item) => {
       const forwardPe = Math.max(0, Math.min(number(item.forward_pe), 60));
-      const roe = Math.max(-20, Math.min(number(item.roe), 80));
+      const roa = Math.max(-10, Math.min(number(item.roa), 30));
       const weight = Math.max(0, number(item.portfolio_weight) || 0);
       const dot = document.createElement("button");
       dot.type = "button";
       dot.className = "map-dot";
       dot.style.left = `${(forwardPe / 60) * 96 + 2}%`;
-      dot.style.bottom = `${((roe + 20) / 100) * 92 + 4}%`;
+      dot.style.bottom = `${((roa + 10) / 40) * 92 + 4}%`;
       dot.style.setProperty("--dot-size", `${Math.min(58, 28 + Math.sqrt(weight) * 5)}px`);
       dot.textContent = item.symbol;
-      dot.title = `${item.symbol} · Forward P/E ${multiple(item.forward_pe)} · ROE ${percent(item.roe)}`;
+      dot.title = `${item.symbol} · Forward P/E ${multiple(item.forward_pe)} · ROA ${percent(item.roa)}`;
       dot.setAttribute("aria-label", dot.title);
       dot.addEventListener("click", () => openDialog(item.symbol));
       map.appendChild(dot);
     });
+  }
+
+  function buildTopHoldingsChart() {
+    const donut = document.querySelector("#holdingsDonut");
+    const list = document.querySelector("#topHoldingsList");
+    const concentrationLabel = document.querySelector("#topTenConcentration");
+    if (!donut || !list) return;
+
+    const ranked = items
+      .filter((item) => number(item.market_value) !== null)
+      .sort((left, right) => number(right.market_value) - number(left.market_value));
+    const topTen = ranked.slice(0, 10);
+    const total = ranked.reduce((sum, item) => sum + number(item.market_value), 0);
+    if (!total || !topTen.length) {
+      if (concentrationLabel) concentrationLabel.textContent = "—";
+      list.innerHTML = "<li><span>目前沒有足夠的持倉市值資料</span></li>";
+      return;
+    }
+
+    const colors = [
+      "#c8ff36", "#62d39b", "#eef7b0", "#32a378", "#aec854",
+      "#4d8873", "#f0efe8", "#89a59a", "#dce878", "#28624f",
+    ];
+    const concentration = topTen.reduce(
+      (sum, item) => sum + (number(item.market_value) / total) * 100,
+      0
+    );
+    let cursor = 0;
+    const slices = topTen.map((item, index) => {
+      const weight = (number(item.market_value) / total) * 100;
+      const slice = `${colors[index]} ${cursor.toFixed(3)}% ${(cursor + weight).toFixed(3)}%`;
+      cursor += weight;
+      return slice;
+    });
+    if (cursor < 100) slices.push(`rgba(240, 239, 232, 0.12) ${cursor.toFixed(3)}% 100%`);
+    donut.style.background = `conic-gradient(${slices.join(", ")})`;
+    donut.setAttribute(
+      "aria-label",
+      `前十大持股占投資組合 ${concentration.toFixed(1)}%，依序為 ${topTen.map((item) => item.symbol).join("、")}`
+    );
+    if (concentrationLabel) concentrationLabel.textContent = `${concentration.toFixed(1)}%`;
+
+    list.innerHTML = topTen
+      .map((item, index) => {
+        const weight = (number(item.market_value) / total) * 100;
+        return `<li style="--slice-color: ${colors[index]}">
+          <span class="holding-rank">${String(index + 1).padStart(2, "0")}</span>
+          <i class="holding-color" aria-hidden="true"></i>
+          <span class="holding-name"><strong>${item.symbol}</strong><small>${compactMoney(item.market_value)}</small></span>
+          <span class="holding-weight">${weight.toFixed(1)}%</span>
+        </li>`;
+      })
+      .join("");
   }
 
   const dialog = document.querySelector("#stockDialog");
@@ -169,16 +222,16 @@
 
   function makeCommentary(item) {
     const notes = [];
-    const roe = number(item.roe);
+    const roa = number(item.roa);
     const trailing = number(item.trailing_pe);
     const forward = number(item.forward_pe);
     const ath = number(item.ath_distance);
 
-    if (roe === null) notes.push("目前缺少可比的 ROE 資料");
-    else if (roe >= 25) notes.push("ROE 顯示資本使用效率強，但仍需確認是否受低權益基數或庫藏股影響");
-    else if (roe >= 15) notes.push("ROE 位於穩健區間");
-    else if (roe >= 0) notes.push("ROE 偏低，建議搭配營業利益率與資產週轉率判讀");
-    else notes.push("ROE 為負，獲利品質仍需改善");
+    if (roa === null) notes.push("目前缺少可比的 ROA 資料");
+    else if (roa >= 15) notes.push("ROA 顯示公司運用整體資產創造獲利的效率很強");
+    else if (roa >= 8) notes.push("ROA 位於穩健區間，資產使用效率良好");
+    else if (roa >= 0) notes.push("ROA 偏低，建議搭配營業利益率與資產週轉率判讀");
+    else notes.push("ROA 為負，獲利品質仍需改善");
 
     if (forward !== null && trailing !== null) {
       if (forward < trailing * 0.9) notes.push("市場預期未來獲利成長，Forward P/E 明顯低於過去十二個月");
@@ -215,7 +268,7 @@
     const metricData = [
       ["P/E · TTM", multiple(item.trailing_pe)],
       ["FORWARD P/E", multiple(item.forward_pe)],
-      ["ROE · TTM", percent(item.roe)],
+      ["ROA · TTM", percent(item.roa)],
       ["距離 ATH", percent(item.ath_distance)],
     ];
     dialog.querySelector("#dialogMetrics").innerHTML = metricData
@@ -242,6 +295,66 @@
     if (event.target === dialog) dialog.close();
   });
 
+  const buybackTooltip = document.querySelector("#buybackTooltip");
+  let activeBuybackTrigger = null;
+
+  function showBuybackTooltip(trigger) {
+    if (!buybackTooltip || !trigger) return;
+    activeBuybackTrigger = trigger;
+    const state = trigger.dataset.buybackActive;
+    const status = state === "true" ? "進行中" : state === "false" ? "未進行" : "未揭露";
+    buybackTooltip.querySelector("#buybackTooltipTitle").textContent =
+      `${trigger.dataset.buybackSymbol} · ${status}`;
+    buybackTooltip.querySelector("#buybackTooltipAuthorized").textContent =
+      state === "true" ? compactMoney(trigger.dataset.buybackAuthorized) : "—";
+    buybackTooltip.querySelector("#buybackTooltipAmount").textContent =
+      state === "true" ? compactMoney(trigger.dataset.buybackAmount) : "—";
+    buybackTooltip.querySelector("#buybackTooltipPeriod").textContent =
+      trigger.dataset.buybackPeriod || "未取得";
+    buybackTooltip.querySelector("#buybackTooltipExpiry").textContent =
+      trigger.dataset.buybackExpiry || "未取得";
+    buybackTooltip.querySelector("#buybackTooltipSource").textContent =
+      trigger.dataset.buybackForm !== "—"
+        ? `${trigger.dataset.buybackForm} · ${trigger.dataset.buybackFiled}`
+        : "未取得";
+    buybackTooltip.dataset.state = state;
+    buybackTooltip.hidden = false;
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const tooltipRect = buybackTooltip.getBoundingClientRect();
+    const gutter = 12;
+    let left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2;
+    left = Math.max(gutter, Math.min(left, window.innerWidth - tooltipRect.width - gutter));
+    let top = triggerRect.top - tooltipRect.height - 10;
+    if (top < gutter) top = triggerRect.bottom + 10;
+    buybackTooltip.style.left = `${left}px`;
+    buybackTooltip.style.top = `${top}px`;
+  }
+
+  function hideBuybackTooltip() {
+    if (buybackTooltip) buybackTooltip.hidden = true;
+    activeBuybackTrigger = null;
+  }
+
+  document.addEventListener("pointerover", (event) => {
+    const trigger = event.target.closest(".buyback-trigger");
+    if (trigger && trigger !== activeBuybackTrigger) showBuybackTooltip(trigger);
+  });
+  document.addEventListener("pointerout", (event) => {
+    const trigger = event.target.closest(".buyback-trigger");
+    if (trigger && !trigger.contains(event.relatedTarget)) hideBuybackTooltip();
+  });
+  document.addEventListener("focusin", (event) => {
+    const trigger = event.target.closest(".buyback-trigger");
+    if (trigger) showBuybackTooltip(trigger);
+  });
+  document.addEventListener("focusout", (event) => {
+    const trigger = event.target.closest(".buyback-trigger");
+    if (trigger && !trigger.contains(event.relatedTarget)) hideBuybackTooltip();
+  });
+  window.addEventListener("scroll", hideBuybackTooltip, { passive: true });
+  window.addEventListener("resize", hideBuybackTooltip);
+
   function escapeCsv(value) {
     const text = String(value ?? "");
     return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
@@ -250,13 +363,19 @@
   document.querySelector("#exportButton")?.addEventListener("click", () => {
     const headers = [
       "Symbol", "Company", "Sector", "Shares", "Average Cost", "Price", "Market Value",
-      "Weight %", "Trailing PE", "Forward PE", "ROE %", "ROI %", "Buyback TTM",
-      "Buyback Active", "All-time High", "Distance from ATH %",
+      "Weight %", "Trailing PE", "Forward PE", "ROA %", "ROI %", "Buyback TTM",
+      "Buyback Authorized", "Buyback Program Expiry", "Buyback Active", "SEC Filing",
+      "SEC Source", "All-time High", "Distance from ATH %",
     ];
     const records = items.map((item) => [
       item.symbol, item.name, item.sector, item.shares, item.cost, item.price, item.market_value,
-      item.portfolio_weight, item.trailing_pe, item.forward_pe, item.roe, item.roi,
-      item.buyback_ttm, item.is_buying_back, item.ath, item.ath_distance,
+      item.portfolio_weight, item.trailing_pe, item.forward_pe, item.roa, item.roi,
+      item.buyback_ttm, item.buyback_authorized_amount, item.buyback_program_expiry,
+      item.is_buying_back,
+      item.buyback_program_form && item.buyback_program_filed
+        ? `${item.buyback_program_form} ${item.buyback_program_filed}`
+        : "",
+      item.buyback_program_source_url, item.ath, item.ath_distance,
     ]);
     const csv = [headers, ...records].map((row) => row.map(escapeCsv).join(",")).join("\n");
     const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
@@ -272,4 +391,5 @@
 
   applyFiltersAndSort();
   buildValuationMap();
+  buildTopHoldingsChart();
 })();

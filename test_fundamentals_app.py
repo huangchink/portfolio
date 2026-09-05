@@ -12,11 +12,11 @@ class FundamentalCalculationsTest(unittest.TestCase):
     def test_buyback_ttm_sums_latest_four_cash_outflows(self):
         cashflow = pd.DataFrame(
             {
-                "2026-Q2": [-120.0],
-                "2026-Q1": [-100.0],
-                "2025-Q4": [-90.0],
-                "2025-Q3": [-80.0],
-                "2025-Q2": [-70.0],
+                pd.Timestamp("2026-06-30"): [-120.0],
+                pd.Timestamp("2026-03-31"): [-100.0],
+                pd.Timestamp("2025-12-31"): [-90.0],
+                pd.Timestamp("2025-09-30"): [-80.0],
+                pd.Timestamp("2025-06-30"): [-70.0],
             },
             index=["Repurchase Of Capital Stock"],
         )
@@ -27,6 +27,16 @@ class FundamentalCalculationsTest(unittest.TestCase):
             {"2026-Q2": [-10.0]}, index=["Capital Expenditure"]
         )
         self.assertEqual(dashboard._buyback_ttm(cashflow), 0.0)
+
+    def test_buyback_activity_includes_latest_disclosure_period(self):
+        cashflow = pd.DataFrame(
+            {pd.Timestamp("2026-06-30"): [-120.0]},
+            index=["Repurchase Of Capital Stock"],
+        )
+        self.assertEqual(
+            dashboard._buyback_activity(cashflow),
+            {"amount": 120.0, "period_end": "2026-06-30"},
+        )
 
     def test_rendered_dashboard_contains_requested_metrics(self):
         item = dashboard._empty_snapshot(
@@ -42,10 +52,16 @@ class FundamentalCalculationsTest(unittest.TestCase):
                 "roi": 20.0,
                 "trailing_pe": 24.0,
                 "forward_pe": 20.0,
-                "roe": 18.0,
+                "roa": 18.0,
                 "ath": 150.0,
                 "ath_distance": -20.0,
                 "buyback_ttm": 1_000_000.0,
+                "buyback_period_end": "2026-06-30",
+                "buyback_authorized_amount": 5_000_000_000.0,
+                "buyback_program_expiry": "無固定期限",
+                "buyback_program_form": "10-Q",
+                "buyback_program_filed": "2026-07-31",
+                "buyback_program_source_url": "https://www.sec.gov/example",
                 "is_buying_back": True,
                 "label": "品質與估值兼具",
             }
@@ -60,7 +76,7 @@ class FundamentalCalculationsTest(unittest.TestCase):
                 "total_cost": 200.0,
                 "total_roi": 20.0,
                 "median_forward_pe": 20.0,
-                "weighted_roe": 18.0,
+                "weighted_roa": 18.0,
                 "buyback_count": 1,
                 "near_ath_count": 0,
                 "coverage_count": 1,
@@ -68,7 +84,17 @@ class FundamentalCalculationsTest(unittest.TestCase):
         }
         with dashboard.app.app_context():
             html = dashboard.render_dashboard(data, asset_prefix="assets")
-        for text in ("Forward P/E", "ROE", "持倉 ROI", "股票回購", "距 ATH"):
+        for text in (
+            "Forward P/E",
+            "ROA",
+            "持倉 ROI",
+            "股票回購",
+            "距 ATH",
+            "前十大持股",
+            "最新授權規模",
+            "近四季實際執行",
+            "計畫期限",
+        ):
             self.assertIn(text, html)
         self.assertIn("TEST", html)
 
@@ -83,7 +109,7 @@ class FundamentalCalculationsTest(unittest.TestCase):
                 "total_cost": 0,
                 "total_roi": None,
                 "median_forward_pe": None,
-                "weighted_roe": None,
+                "weighted_roa": None,
                 "buyback_count": 0,
                 "near_ath_count": 0,
                 "coverage_count": 0,

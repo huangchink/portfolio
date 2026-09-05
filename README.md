@@ -3,12 +3,12 @@
 個人投資組合基本面分析網站，集中呈現：
 
 - Trailing P/E 與 Forward P/E
-- ROE（股東權益報酬率）
+- ROA（資產報酬率）
 - 依個人平均成本計算的持倉 ROI
-- 最近四個已揭露季度是否有股票回購
+- 最近四個已揭露季度是否有股票回購，並提供規模、資料期間與計畫期限提示
 - 現價距離拆股調整後歷史最高價（ATH）的百分比
 
-網站資料由 Yahoo Finance 取得，GitHub Actions 每日產生靜態快照並部署至 GitHub Pages。
+行情與財務資料由 Yahoo Finance 取得，回購授權規模與期限則從最新 SEC 定期報告擷取；GitHub Actions 每日產生靜態快照並部署至 GitHub Pages。
 
 ## 本機執行
 
