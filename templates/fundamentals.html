@@ -17,6 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
   <link rel="stylesheet" href="{{ asset_prefix }}/dashboard.css">
 </head>
 <body>
@@ -155,6 +156,7 @@
         <div class="top-holdings-layout">
           <div class="donut-wrap">
             <div class="holdings-donut" id="holdingsDonut" role="img" aria-label="前十大持股圓餅圖">
+              <canvas id="holdingsDonutCanvas" aria-hidden="true"></canvas>
               <div class="donut-center">
                 <span>TOP 10</span>
                 <strong id="topTenConcentration">—</strong>

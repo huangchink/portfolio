@@ -91,6 +91,7 @@ class FundamentalCalculationsTest(unittest.TestCase):
             "股票回購",
             "距 ATH",
             "前十大持股",
+            "holdingsDonutCanvas",
             "最新授權規模",
             "近四季實際執行",
             "計畫期限",

@@ -431,11 +431,19 @@ button { color: inherit; }
   border-radius: 50%;
   background: rgba(240, 239, 232, 0.1);
   box-shadow: inset 0 0 0 1px var(--line-light);
-  transform: rotate(-90deg);
 }
 
-.holdings-donut::before {
+.holdings-donut canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.holdings-donut.is-fallback::before {
   content: "";
+  position: absolute;
+  z-index: 1;
   width: 55%;
   aspect-ratio: 1;
   border-radius: 50%;
@@ -448,7 +456,8 @@ button { color: inherit; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  transform: rotate(90deg);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .donut-center span,

@@ -166,9 +166,10 @@
 
   function buildTopHoldingsChart() {
     const donut = document.querySelector("#holdingsDonut");
+    const canvas = document.querySelector("#holdingsDonutCanvas");
     const list = document.querySelector("#topHoldingsList");
     const concentrationLabel = document.querySelector("#topTenConcentration");
-    if (!donut || !list) return;
+    if (!donut || !canvas || !list) return;
 
     const ranked = items
       .filter((item) => number(item.market_value) !== null)
@@ -182,39 +183,127 @@
     }
 
     const colors = [
-      "#c8ff36", "#62d39b", "#eef7b0", "#32a378", "#aec854",
-      "#4d8873", "#f0efe8", "#89a59a", "#dce878", "#28624f",
+      "#4e9af1", "#f16b4e", "#4ecf8a", "#b06cf7", "#f7c24e",
+      "#4ec8f7", "#f74e8e", "#7ecf4e", "#f74e4e", "#4e6ff7",
+      "#f7934e",
     ];
     const concentration = topTen.reduce(
       (sum, item) => sum + (number(item.market_value) / total) * 100,
       0
     );
-    let cursor = 0;
-    const slices = topTen.map((item, index) => {
-      const weight = (number(item.market_value) / total) * 100;
-      const slice = `${colors[index]} ${cursor.toFixed(3)}% ${(cursor + weight).toFixed(3)}%`;
-      cursor += weight;
-      return slice;
-    });
-    if (cursor < 100) slices.push(`rgba(240, 239, 232, 0.12) ${cursor.toFixed(3)}% 100%`);
-    donut.style.background = `conic-gradient(${slices.join(", ")})`;
+    const otherValue = ranked.slice(10).reduce(
+      (sum, item) => sum + number(item.market_value),
+      0
+    );
+    const chartItems = [
+      ...topTen,
+      ...(otherValue > 0
+        ? [{ symbol: "Others", name: "其他持股", market_value: otherValue }]
+        : []),
+    ];
     donut.setAttribute(
       "aria-label",
       `前十大持股占投資組合 ${concentration.toFixed(1)}%，依序為 ${topTen.map((item) => item.symbol).join("、")}`
     );
     if (concentrationLabel) concentrationLabel.textContent = `${concentration.toFixed(1)}%`;
 
-    list.innerHTML = topTen
+    list.innerHTML = chartItems
       .map((item, index) => {
         const weight = (number(item.market_value) / total) * 100;
         return `<li style="--slice-color: ${colors[index]}">
-          <span class="holding-rank">${String(index + 1).padStart(2, "0")}</span>
+          <span class="holding-rank">${index < 10 ? String(index + 1).padStart(2, "0") : "—"}</span>
           <i class="holding-color" aria-hidden="true"></i>
-          <span class="holding-name"><strong>${item.symbol}</strong><small>${compactMoney(item.market_value)}</small></span>
+          <span class="holding-name"><strong>${item.symbol}</strong><small>${index < 10 ? compactMoney(item.market_value) : `其餘 ${Math.max(0, ranked.length - 10)} 檔`}</small></span>
           <span class="holding-weight">${weight.toFixed(1)}%</span>
         </li>`;
       })
       .join("");
+
+    if (!window.Chart) {
+      let cursor = 0;
+      const slices = chartItems.map((item, index) => {
+        const weight = (number(item.market_value) / total) * 100;
+        const slice = `${colors[index]} ${cursor.toFixed(3)}% ${(cursor + weight).toFixed(3)}%`;
+        cursor += weight;
+        return slice;
+      });
+      donut.style.background = `conic-gradient(${slices.join(", ")})`;
+      donut.classList.add("is-fallback");
+      canvas.hidden = true;
+      return;
+    }
+
+    const logoImages = {};
+    let chart = null;
+    topTen.forEach((item, index) => {
+      const image = new Image();
+      image.src = `https://assets.parqet.com/logos/symbol/${encodeURIComponent(item.symbol)}?format=png`;
+      image.addEventListener("load", () => chart?.draw());
+      logoImages[index] = image;
+    });
+
+    const logoPlugin = {
+      id: "portfolioLogoPlugin",
+      afterDatasetDraw(chartInstance) {
+        const context = chartInstance.ctx;
+        const meta = chartInstance.getDatasetMeta(0);
+        meta.data.forEach((element, index) => {
+          const image = logoImages[index];
+          if (!image?.complete || !image.naturalWidth) return;
+          const { x, y } = element.tooltipPosition();
+          const size = Math.max(24, Math.min(36, element.outerRadius - element.innerRadius - 8));
+          context.save();
+          context.beginPath();
+          context.arc(x, y, size / 2 + 1, 0, Math.PI * 2);
+          context.fillStyle = "rgba(255, 255, 255, 0.9)";
+          context.fill();
+          context.beginPath();
+          context.arc(x, y, size / 2, 0, Math.PI * 2);
+          context.clip();
+          context.drawImage(image, x - size / 2, y - size / 2, size, size);
+          context.restore();
+        });
+      },
+    };
+
+    chart = new window.Chart(canvas.getContext("2d"), {
+      type: "doughnut",
+      plugins: [logoPlugin],
+      data: {
+        labels: chartItems.map((item) => item.symbol),
+        datasets: [{
+          data: chartItems.map((item) => number(item.market_value)),
+          backgroundColor: colors,
+          borderColor: "#13221f",
+          borderWidth: 3,
+          hoverOffset: 10,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "62%",
+        animation: { duration: 650 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#07110f",
+            borderColor: "rgba(240, 239, 232, 0.22)",
+            borderWidth: 1,
+            titleColor: "#f0efe8",
+            bodyColor: "#c8ff36",
+            padding: 12,
+            callbacks: {
+              label(context) {
+                const value = context.parsed;
+                const weight = (value / total) * 100;
+                return ` ${money(value, 0)}  (${weight.toFixed(1)}%)`;
+              },
+            },
+          },
+        },
+      },
+    });
   }
 
   const dialog = document.querySelector("#stockDialog");
