@@ -8,7 +8,7 @@ Usage:
 Local preview: http://127.0.0.1:5000/
 """
 
-from flask import Flask, render_template_string
+from flask import Flask, render_template_string, send_file
 import re
 import html as html_lib
 from datetime import datetime, timedelta
@@ -1543,15 +1543,7 @@ def _build_portfolio_snapshot():
 
 
 # ================== HTML 模板 ==================
-TEMPLATE = r"""<!doctype html>
-<html lang="zh-TW">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chink 的投資觀察清單</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Source+Code+Pro:wght@400;600&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <style>
+COMMON_STYLES = r"""
         :root {
             --gold:       #c9a84c;
             --gold-light: #e8c97a;
@@ -2166,40 +2158,31 @@ TEMPLATE = r"""<!doctype html>
             line-height: 1.6;
         }
         .daily-radar-market {
-            color: #bbb;
+            color: var(--gold-light);
+            font-weight: 600;
         }
-        .daily-radar-table {
-            min-width: 1000px;
-        }
-        .daily-radar-table th,
         .daily-radar-table td {
-            padding-left: 8px;
-            padding-right: 8px;
+            font-size: 0.78rem;
         }
-        .signal-badge,
-        .rating-badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 24px;
-            padding: 3px 8px;
-            border: 1px solid var(--border);
+        .daily-radar-table th {
+            font-size: 0.65rem;
+        }
+        .signal-badge {
+            display: inline-block;
+            padding: 2px 7px;
             border-radius: 4px;
-            font-family: 'Noto Sans TC', sans-serif;
-            font-size: .7rem;
-            font-weight: 700;
-            white-space: nowrap;
+            font-size: 0.68rem;
+            font-weight: 600;
         }
-        .signal-badge.bullish { color: var(--green); background: var(--green-dim); border-color: rgba(61,220,132,.28); }
-        .signal-badge.bearish { color: var(--red); background: var(--red-dim); border-color: rgba(255,95,95,.28); }
-        .signal-badge.neutral { color: #bbb; background: rgba(255,255,255,.04); }
+        .signal-badge.bullish { color: var(--green); background: var(--green-dim); border: 1px solid rgba(61,220,132,.25); }
+        .signal-badge.bearish { color: var(--red); background: var(--red-dim); border: 1px solid rgba(255,95,95,.25); }
+        .signal-badge.neutral { color: var(--text-dim); background: rgba(255,255,255,.05); border: 1px solid var(--border); }
+
         .score-cell {
-            display: inline-flex;
-            align-items: baseline;
-            gap: 2px;
+            font-family: 'Source Code Pro', monospace;
+            font-weight: 700;
             color: #fff;
             font-size: 1rem;
-            font-weight: 700;
         }
         .score-cell small { color: var(--text-dim); font-size: .62rem; font-weight: 400; }
         .rating-badge.enter { color: #111; background: var(--green); border-color: var(--green); }
@@ -2214,14 +2197,54 @@ TEMPLATE = r"""<!doctype html>
             border-top: 1px solid rgba(255,255,255,.04);
         }
 
+        .global-events-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .global-events-source {
+            font-size: 0.72rem;
+            color: var(--gold-light);
+            text-decoration: none;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+        .global-events-source:hover { text-decoration: underline; }
+        .global-events-table td { font-size: 0.78rem; }
+        .global-events-table th { font-size: 0.65rem; }
+        .event-date-cell { font-family: 'Source Code Pro', monospace; color: #fff; }
+        .event-date-cell span { display: block; font-size: 0.68rem; color: var(--text-dim); margin-top: 2px; }
+        .event-name-cell { color: #eee; font-weight: 500; }
+        .event-estimate-cell { font-family: 'Source Code Pro', monospace; color: var(--text-dim); }
+        .event-estimate-cell span { display: block; font-size: 0.68rem; color: var(--text-dim); margin-top: 2px; }
+        .event-impact-cell { font-size: 0.75rem; color: var(--text-dim); line-height: 1.4; }
+        .importance-badge {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 0.68rem;
+            font-weight: 600;
+        }
+        .importance-badge.high { color: var(--red); background: var(--red-dim); border: 1px solid rgba(255,95,95,.25); }
+        .importance-badge.medium { color: var(--gold-light); background: rgba(201,168,76,.12); border: 1px solid rgba(201,168,76,.3); }
+        .importance-badge.low { color: var(--text-dim); background: rgba(255,255,255,.05); border: 1px solid var(--border); }
+        .global-events-note {
+            padding-top: 12px;
+            color: var(--text-dim);
+            font-size: 0.68rem;
+            line-height: 1.7;
+            border-top: 1px solid rgba(255,255,255,.04);
+            margin-top: 8px;
+        }
+
         /* ── FOOTER ── */
         footer {
             max-width: 1100px;
             margin: 48px auto 0;
             padding: 0 40px;
-            font-size: .65rem;
+            font-size: 0.65rem;
             color: var(--text-dim);
-            letter-spacing: .5px;
+            letter-spacing: 0.5px;
             border-top: 1px solid var(--border);
             padding-top: 20px;
         }
@@ -2236,37 +2259,14 @@ TEMPLATE = r"""<!doctype html>
             .full-width-card { padding: 24px 20px; }
             .fear-greed-grid { grid-template-columns: 1fr; }
             .fear-greed-score { border-right: none; padding-right: 0; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
-            .macro-card-grid { grid-template-columns: 1fr; }
-            .macro-value-panel { border-right: none; border-bottom: 1px solid var(--border); padding-right: 0; padding-bottom: 16px; }
-            .macro-detail-grid { grid-template-columns: 1fr 1fr; }
             .table-section { padding: 0 20px; }
             .global-events-heading { align-items: flex-start; flex-direction: column; gap: 6px; }
             .daily-radar-meta { align-items: flex-start; flex-direction: column; gap: 4px; }
             footer { padding: 20px 20px 0; }
         }
-    </style>
-</head>
-<body>
+"""
 
-<!-- ── HEADER ── -->
-<header>
-    <div>
-        <div class="site-title">Chink Portfolio</div>
-        <div class="site-subtitle">Investment Watchlist · 自選股追蹤</div>
-    </div>
-    <div style="display: flex; align-items: center; gap: 16px;">
-        <nav style="display: flex; gap: 8px;">
-            <a href="index.html" style="padding: 6px 12px; background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue); border-radius: 4px; font-family: 'Noto Sans TC', sans-serif; font-size: 0.78rem; font-weight: 700; text-decoration: none;">📈 持倉追蹤總覽</a>
-            <a href="fundamentals.html" style="padding: 6px 12px; background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid var(--border); border-radius: 4px; font-family: 'Noto Sans TC', sans-serif; font-size: 0.78rem; font-weight: 500; text-decoration: none;">📊 基本面決策台 ↗</a>
-        </nav>
-        <div class="meta-time">
-            <strong>Last Updated</strong>
-            {{ updated_at_tw }} 台北時間
-        </div>
-    </div>
-</header>
-
-<!-- ── BUFFETT QUOTE ── -->
+BUFFETT_QUOTES_JINJA = r"""
 {% set quotes = [
     '投資的第一條規則是永遠不要賠錢。第二條規則是永遠不要忘記第一條，所以要買台積。',
     '價格是你所付出的，價值是你所得到的。',
@@ -2290,22 +2290,40 @@ TEMPLATE = r"""<!doctype html>
         <div class="quote-author">— Warren Buffett · 巴菲特語錄</div>
     </div>
 </div>
+"""
 
-<!-- ── CURRENT OPERATIONS ── -->
-<div class="full-width-card" style="margin-top: 32px; margin-bottom: 0;">
-    <div class="chart-label">Current Strategy · 目前操作策略</div>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
-        <div class="macro-detail-item" style="display: flex; flex-direction: column; justify-content: space-between;">
-            <div style="color: var(--text-dim); font-size: 0.85rem; line-height: 1.6; margin-bottom: 16px;">
-                1. All in TSMC
-            </div>
-            <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light); font-weight: 700; font-size: 1.1rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; text-align: right;">
-                ==&gt; 全倉台積 信貸房貸車貸卡貸他媽全倉幹進去
-            </div>
-        </div>
+INDEX_TEMPLATE = r"""<!doctype html>
+<html lang="zh-TW">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chink Portfolio｜持倉追蹤總覽</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Source+Code+Pro:wght@400;600&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>""" + COMMON_STYLES + r"""</style>
+</head>
+<body>
 
+<!-- ── HEADER ── -->
+<header>
+    <div>
+        <div class="site-title">Chink Portfolio</div>
+        <div class="site-subtitle">Investment Watchlist · 自選股追蹤</div>
     </div>
-</div>
+    <div style="display: flex; align-items: center; gap: 16px;">
+        <nav style="display: flex; gap: 8px;">
+            <a href="index.html" style="padding: 6px 12px; background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue); border-radius: 4px; font-family: 'Noto Sans TC', sans-serif; font-size: 0.78rem; font-weight: 700; text-decoration: none;">📈 持倉追蹤總覽</a>
+            <a href="fundamentals.html" style="padding: 6px 12px; background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid var(--border); border-radius: 4px; font-family: 'Noto Sans TC', sans-serif; font-size: 0.78rem; font-weight: 500; text-decoration: none;">📊 持倉估值分析 ↗</a>
+            <a href="bottom_fishing.html" style="padding: 6px 12px; background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid var(--border); border-radius: 4px; font-family: 'Noto Sans TC', sans-serif; font-size: 0.78rem; font-weight: 500; text-decoration: none;">🎯 抄底計畫</a>
+        </nav>
+        <div class="meta-time">
+            <strong>Last Updated</strong>
+            {{ updated_at_tw }} 台北時間
+        </div>
+    </div>
+</header>
+
+""" + BUFFETT_QUOTES_JINJA + r"""
 
 <!-- ── DASHBOARD ── -->
 <div class="main">
@@ -2416,401 +2434,7 @@ TEMPLATE = r"""<!doctype html>
     </div>
 </div>
 
-<div class="full-width-card">
-    <div class="chart-label" style="display: flex; justify-content: space-between; align-items: center;">
-        <span>CNN Fear & Greed Index · 市場情緒</span>
-        <a href="https://edition.cnn.com/markets/fear-and-greed" target="_blank" rel="noopener" style="font-size: 0.75rem; font-weight: 500; color: var(--gold-light); text-decoration: none; padding-bottom: 2px;">Data Source ↗</a>
-    </div>
-    <div class="fear-greed-grid">
-        <div class="fear-greed-score">
-            <div class="fear-greed-snapshot-table">
-                <div class="fear-greed-snapshot-row">
-                    <div>
-                        <div class="fear-greed-snapshot-label">Previous close</div>
-                        <div class="fear-greed-snapshot-rating">{{ fear_greed_prev_rating }}</div>
-                    </div>
-                    <div class="fear-greed-snapshot-badge">{{ fear_greed_prev_str }}</div>
-                </div>
-                <div class="fear-greed-snapshot-row">
-                    <div>
-                        <div class="fear-greed-snapshot-label">1 week ago</div>
-                        <div class="fear-greed-snapshot-rating">{{ fear_greed_week_rating }}</div>
-                    </div>
-                    <div class="fear-greed-snapshot-badge">{{ fear_greed_week_score_str }}</div>
-                </div>
-                <div class="fear-greed-snapshot-row">
-                    <div>
-                        <div class="fear-greed-snapshot-label">1 month ago</div>
-                        <div class="fear-greed-snapshot-rating">{{ fear_greed_month_rating }}</div>
-                    </div>
-                    <div class="fear-greed-snapshot-badge">{{ fear_greed_month_score_str }}</div>
-                </div>
-                <div class="fear-greed-snapshot-row">
-                    <div>
-                        <div class="fear-greed-snapshot-label">1 year ago</div>
-                        <div class="fear-greed-snapshot-rating">{{ fear_greed_year_rating }}</div>
-                    </div>
-                    <div class="fear-greed-snapshot-badge">{{ fear_greed_year_score_str }}</div>
-                </div>
-            </div>
-            <div class="fear-greed-value">{{ fear_greed_score_str }}</div>
-            <div class="fear-greed-rating">{{ fear_greed_rating }}</div>
-            <div class="fear-greed-meta">前一日：{{ fear_greed_prev_str }}</div>
-            <div class="fear-greed-meta">日變動：
-                <span class="{% if fear_greed_delta is not none and fear_greed_delta > 0 %}gain-cell{% elif fear_greed_delta is not none and fear_greed_delta < 0 %}loss-cell{% endif %}">
-                    {{ fear_greed_delta_str }}
-                </span>
-            </div>
-            <div class="fear-greed-meta">區間：0–24 極度恐懼 · 25–44 恐懼 · 45–55 中性 · 56–74 貪婪 · 75–100 極度貪婪</div>
-        </div>
-        <div class="fear-greed-right">
-            <div class="fear-greed-chart-wrap">
-                <canvas id="fearGreedChart"></canvas>
-            </div>
-            <div class="fear-greed-gauge-wrap">
-                <div class="fear-greed-gauge">
-                    <svg viewBox="0 0 640 340" aria-label="CNN Fear and Greed Gauge">
-                        <path id="fg-sector-0" d="M38 300 A282 282 0 0 1 121.59 100.51 L175.63 154.55 A205.58 205.58 0 0 0 114.42 300 Z" fill="#e8e8e8"/>
-                        <path id="fg-sector-1" d="M125.83 96.42 A282 282 0 0 1 254.96 26.09 L270.57 100.48 A205.58 205.58 0 0 0 179.67 149.97 Z" fill="#e4e4e4"/>
-                        <path id="fg-sector-2" d="M259.83 25.09 A282 282 0 0 1 380.17 25.09 L364.56 99.48 A205.58 205.58 0 0 0 275.44 99.48 Z" fill="#dddddd"/>
-                        <path id="fg-sector-3" d="M385.04 26.09 A282 282 0 0 1 514.17 96.42 L460.33 149.97 A205.58 205.58 0 0 0 369.43 100.48 Z" fill="#e4e4e4"/>
-                        <path id="fg-sector-4" d="M518.41 100.51 A282 282 0 0 1 602 300 L525.58 300 A205.58 205.58 0 0 0 464.37 154.55 Z" fill="#e8e8e8"/>
 
-                        <path d="M114.42 300 A205.58 205.58 0 0 1 525.58 300" fill="none" stroke="#dedede" stroke-width="76" stroke-linecap="butt"/>
-
-                        <text x="175" y="92" class="gauge-label-text" transform="rotate(-33 175 92)">FEAR</text>
-                        <text x="282" y="52" class="gauge-label-text">NEUTRAL</text>
-                        <text x="422" y="92" class="gauge-label-text" transform="rotate(33 422 92)">GREED</text>
-                        <text x="70" y="246" class="gauge-label-text" transform="rotate(-63 70 246)">EXTREME</text>
-                        <text x="76" y="274" class="gauge-label-text" transform="rotate(-63 76 274)">FEAR</text>
-                        <text x="560" y="246" class="gauge-label-text" transform="rotate(63 560 246)">EXTREME</text>
-                        <text x="564" y="274" class="gauge-label-text" transform="rotate(63 564 274)">GREED</text>
-
-                        <text x="145" y="184" class="gauge-tick-text">25</text>
-                        <text x="300" y="132" class="gauge-tick-text">50</text>
-                        <text x="445" y="184" class="gauge-tick-text">75</text>
-                        <text x="112" y="297" class="gauge-tick-text">0</text>
-                        <text x="488" y="297" class="gauge-tick-text">100</text>
-
-                        <circle cx="320" cy="300" r="58" fill="#e7e7e7"/>
-                        <text id="fearGreedGaugeScore" x="320" y="340" text-anchor="middle" class="gauge-number">{{ fear_greed_score_str }}</text>
-
-                        <g id="fearGreedNeedle" class="gauge-needle">
-                            <rect x="128" y="294" width="192" height="12" fill="#1f1f1f" rx="2" ry="2"/>
-                            <path d="M128 286 L86 300 L128 314 Z" fill="#1f1f1f"/>
-                        </g>
-                    </svg>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-
-<div class="full-width-card" style="padding: 24px 40px;">
-    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px;">
-        <div>
-            <div class="chart-label" style="border: none; padding: 0; margin: 0 0 8px 0;">S&amp;P 500 Trailing P/E · 實際本益比 (近12個月)</div>
-            <div class="macro-meta">資料日期：{{ sp500_fpe_date }} · 來源：<a href="{{ sp500_fpe_source_url }}" target="_blank" rel="noopener" style="color: var(--gold-light); text-decoration:none;">{{ sp500_fpe_source_name }}</a></div>
-        </div>
-        <div style="display: flex; gap: 32px; align-items: baseline;">
-            <div>
-                <span class="macro-meta">Latest: </span>
-                <span style="font-family: 'Source Code Pro', monospace; font-size: 1.4rem; color: var(--gold-light); font-weight: 700;">{{ sp500_fpe_value_str }}</span>
-                <span class="macro-meta" style="margin-left: 4px;">({{ sp500_fpe_valuation }})</span>
-            </div>
-            <div>
-                <span class="macro-meta">Previous: </span>
-                <span style="font-family: 'Source Code Pro', monospace; font-size: 1.1rem; color: #fff;">{{ sp500_fpe_prev_value_str }}</span>
-            </div>
-            <div>
-                <span class="macro-meta">Delta: </span>
-                <span class="{% if sp500_fpe_delta is not none and sp500_fpe_delta > 0 %}gain-cell{% elif sp500_fpe_delta is not none and sp500_fpe_delta < 0 %}loss-cell{% endif %}" style="font-family: 'Source Code Pro', monospace; font-size: 1.1rem; font-weight: 600;">{{ sp500_fpe_delta_str }}</span>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="full-width-card" style="margin-top: 24px; padding: 28px 40px;">
-    <div class="chart-label">S&amp;P 500 Technical Trend · 大盤均線技術面</div>
-    <div style="display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 40px; align-items: stretch;">
-        <div>
-            <div style="font-size: 2.2rem; color: #fff; font-family: 'Source Code Pro', monospace; font-weight: 700; line-height: 1.2;">
-                {{ sp5_price }}
-            </div>
-            <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 24px;">S&P 500 Current Price</div>
-            
-            <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
-                <li style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);">
-                    <div>月線 (20MA) 
-                        {% if sp5_b20 %}
-                        <span style="color: var(--red); font-size: 0.7rem; background: var(--red-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">跌破</span>
-                        {% else %}
-                        <span style="color: var(--green); font-size: 0.7rem; background: var(--green-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">有守</span>
-                        {% endif %}
-                    </div>
-                    <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ sp5_ma20 }}</div>
-                </li>
-                <li style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);">
-                    <div>季線 (60MA) 
-                        {% if sp5_b60 %}
-                        <span style="color: var(--red); font-size: 0.7rem; background: var(--red-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">跌破</span>
-                        {% else %}
-                        <span style="color: var(--green); font-size: 0.7rem; background: var(--green-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">有守</span>
-                        {% endif %}
-                    </div>
-                    <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ sp5_ma60 }}</div>
-                </li>
-                <li style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);">
-                    <div>年線 (250MA) 
-                        {% if sp5_b250 %}
-                        <span style="color: var(--red); font-size: 0.7rem; background: var(--red-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">跌破</span>
-                        {% else %}
-                        <span style="color: var(--green); font-size: 0.7rem; background: var(--green-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">有守</span>
-                        {% endif %}
-                    </div>
-                    <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ sp5_ma250 }}</div>
-                </li>
-                <li style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
-                    <div>五年線 (1250MA) 
-                        {% if sp5_b1250 %}
-                        <span style="color: var(--red); font-size: 0.7rem; background: var(--red-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">跌破</span>
-                        {% else %}
-                        <span style="color: var(--green); font-size: 0.7rem; background: var(--green-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">有守</span>
-                        {% endif %}
-                    </div>
-                    <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ sp5_ma1250 }}</div>
-                </li>
-            </ul>
-        </div>
-        <div style="position: relative; min-height: 250px;">
-            <canvas id="sp500HistChart"></canvas>
-        </div>
-    </div>
-</div>
-
-<div class="full-width-card" style="margin-top: 24px; padding: 28px 40px;">
-    <div class="chart-label">Contrarian Bottom-Fishing Signals · 抄底策略指標</div>
-    <div style="font-size: .75rem; color: var(--text-dim); margin-bottom: 24px;">
-        當市場極度恐慌、融資退場、選擇權避險情緒高漲時，往往是相對低點。本區指標皆為反向指標。
-    </div>
-
-    <!-- 抄底訊號判定區域 -->
-    <div style="margin-bottom: 24px; padding: 20px; background: linear-gradient(135deg, rgba(201,168,76,0.05), rgba(0,0,0,0)); border: 1px solid rgba(201,168,76,0.3); border-radius: 6px;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
-            <!-- B 級 -->
-            <div>
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                    <div style="font-size: 1.1rem; color: var(--gold-light); font-weight: 700; display: flex; align-items: center; gap: 8px;">
-                        B 級訊號：開始分批抄底
-                        {% if b_class_signal %}
-                            <span style="background: var(--green); color: #000; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">達成</span>
-                        {% endif %}
-                    </div>
-                    <div style="font-size: 0.85rem; color: var(--text-dim);">符合條件：<span style="color: #fff; font-weight: 700;">{{ b_conds_met }} / 6 (需滿4項)</span></div>
-                </div>
-                <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 12px;">先打 10%~20% 現金</div>
-                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if b_cond_sp500 %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_sp500 %}●{% else %}○{% endif %}</span> 
-                        S&amp;P 500 距前高跌 10% 以上 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_dd_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if b_cond_vix %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_vix %}●{% else %}○{% endif %}</span> 
-                        VIX &gt; 30 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ vix_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if b_cond_pcr %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_pcr %}●{% else %}○{% endif %}</span> 
-                        Put/Call Ratio &gt; 0.9 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ pcr_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if b_cond_finra %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_finra %}●{% else %}○{% endif %}</span> 
-                        FINRA 融資餘額轉弱 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ finra_mom_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if b_cond_fg %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_fg %}●{% else %}○{% endif %}</span> 
-                        CNN Fear &amp; Greed &lt; 15 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ fear_greed_score_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if b_cond_ma60 %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_ma60 %}●{% else %}○{% endif %}</span> 
-                        S&amp;P 500 跌破季線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if b_cond_ma60 %}跌破{% else %}未破{% endif %})</span>
-                    </li>
-                </ul>
-            </div>
-            <!-- A 級 -->
-            <div>
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                    <div style="font-size: 1.1rem; color: var(--gold-light); font-weight: 700; display: flex; align-items: center; gap: 8px;">
-                        A 級訊號：可以大量抄底
-                        {% if a_class_signal %}
-                            <span style="background: var(--green); color: #000; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">達成</span>
-                        {% endif %}
-                    </div>
-                    <div style="font-size: 0.85rem; color: var(--text-dim);">符合條件：<span style="color: #fff; font-weight: 700;">{{ a_conds_met }} / 7 (需滿5項)</span></div>
-                </div>
-                <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 12px;">先打 20%~40% 現金</div>
-                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if a_cond_sp500 %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_sp500 %}●{% else %}○{% endif %}</span> 
-                        S&amp;P 500 跌 15%~20% <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_dd_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if a_cond_vix %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_vix %}●{% else %}○{% endif %}</span> 
-                        VIX &gt; 35 或 40 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ vix_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if a_cond_pcr %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_pcr %}●{% else %}○{% endif %}</span> 
-                        Put/Call Ratio &gt; 1.0 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ pcr_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if a_cond_finra_cont %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_finra_cont %}●{% else %}○{% endif %}</span> 
-                        FINRA 融資餘額連續下滑 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ finra_mom_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if a_cond_pe %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_pe %}●{% else %}○{% endif %}</span> 
-                        S&amp;P 500 Trailing P/E &lt; 25 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_fpe_value_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if a_cond_fg %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_fg %}●{% else %}○{% endif %}</span> 
-                        CNN Fear &amp; Greed &lt; 10 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ fear_greed_score_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if a_cond_ma250 %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_ma250 %}●{% else %}○{% endif %}</span> 
-                        S&amp;P 500 跌破年線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if a_cond_ma250 %}跌破{% else %}未破{% endif %})</span>
-                    </li>
-                </ul>
-            </div>
-            <!-- S 級 -->
-            <div>
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                    <div style="font-size: 1.1rem; color: var(--gold-light); font-weight: 700; display: flex; align-items: center; gap: 8px;">
-                        S 級訊號：極端底部
-                        {% if s_class_signal %}
-                            <span style="background: var(--green); color: #000; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">強烈達成</span>
-                        {% endif %}
-                    </div>
-                    <div style="font-size: 0.85rem; color: var(--text-dim);">符合條件：<span style="color: #fff; font-weight: 700;">{{ s_conds_met }} / 7 (需滿5項)</span></div>
-                </div>
-                <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 12px;">全面建倉 / 重壓</div>
-                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if s_cond_sp500 %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_sp500 %}●{% else %}○{% endif %}</span> 
-                        S&amp;P 500 跌 20% <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_dd_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if s_cond_vix %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_vix %}●{% else %}○{% endif %}</span> 
-                        VIX &gt; 35 或 40 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ vix_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if s_cond_pcr %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_pcr %}●{% else %}○{% endif %}</span> 
-                        Put/Call Ratio &gt; 1.0 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ pcr_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if s_cond_finra_cont %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_finra_cont %}●{% else %}○{% endif %}</span> 
-                        FINRA 融資餘額連續下滑 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ finra_mom_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if s_cond_pe %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_pe %}●{% else %}○{% endif %}</span> 
-                        S&amp;P 500 Trailing P/E &lt; 15 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_fpe_value_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if s_cond_fg %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_fg %}●{% else %}○{% endif %}</span> 
-                        CNN Fear &amp; Greed &lt; 5 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ fear_greed_score_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if s_cond_ma1250 %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_ma1250 %}●{% else %}○{% endif %}</span> 
-                        S&amp;P 500 跌破五年線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if s_cond_ma1250 %}跌破{% else %}未破{% endif %})</span>
-                    </li>
-                </ul>
-            </div>
-            <!-- SS 級 -->
-            <div>
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                    <div style="font-size: 1.1rem; color: #ff4d4d; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-                        SS 級訊號：史詩大底
-                        {% if ss_class_signal %}
-                            <span style="background: var(--red); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">財富重分配</span>
-                        {% endif %}
-                    </div>
-                    <div style="font-size: 0.85rem; color: var(--text-dim);">符合條件：<span style="color: #fff; font-weight: 700;">{{ ss_conds_met }} / 5 (需滿4項)</span></div>
-                </div>
-                <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 12px;">信貸ALL IN / 破產或暴富</div>
-                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if ss_cond_sp500 %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_sp500 %}●{% else %}○{% endif %}</span> 
-                        S&amp;P 500 跌 30% <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_dd_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if ss_cond_vix %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_vix %}●{% else %}○{% endif %}</span> 
-                        VIX &gt; 40 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ vix_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if ss_cond_pcr %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_pcr %}●{% else %}○{% endif %}</span> 
-                        Put/Call Ratio &gt; 1.2 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ pcr_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if ss_cond_shiller %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_shiller %}●{% else %}○{% endif %}</span> 
-                        Shiller P/E &lt; 20 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ shiller_pe_value_str }})</span>
-                    </li>
-                    <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        <span style="color: {% if ss_cond_ma1250 %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_ma1250 %}●{% else %}○{% endif %}</span> 
-                        S&amp;P 500 跌破五年線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if ss_cond_ma1250 %}跌破{% else %}未破{% endif %})</span>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </div>
-    
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
-        
-        <!-- FINRA Margin -->
-        <div style="background: linear-gradient(180deg, #121212, #0f0f0f); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 20px;">
-            <div style="font-size: .7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;">FINRA Margin Debt</div>
-            <div style="font-size: 1.6rem; color: #fff; font-family: 'Source Code Pro', monospace; font-weight: 700; margin-bottom: 6px;">
-                {{ finra_val_str }} <span style="font-size: 0.8rem; color: var(--text-dim); font-weight: 400;">百萬 USD</span>
-            </div>
-            <div style="font-family: 'Source Code Pro', monospace; font-size: .78rem; margin-bottom: 16px;">MoM: <span class="{% if finra_mom is not none and finra_mom > 0 %}gain-cell{% elif finra_mom is not none and finra_mom < 0 %}loss-cell{% endif %}">{{ finra_mom_str }}</span></div>
-            <div style="font-size: .75rem; color: #999; line-height: 1.6;">
-                <strong>策略含義：</strong>代表美股融資(槓桿)餘額。當市場大跌且融資餘額<b>大幅快速下降(斷頭)</b>時，代表籌碼洗淨，有利於底部形成。
-            </div>
-            <div style="font-family: 'Source Code Pro', monospace; font-size: .7rem; color: var(--text-dim); margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.04);">資料月份：{{ finra_month }}</div>
-        </div>
-
-        <!-- Cboe VIX -->
-        <div style="background: linear-gradient(180deg, #121212, #0f0f0f); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 20px;">
-            <div style="font-size: .7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;">CBOE Volatility Index (VIX)</div>
-            <div style="font-size: 1.8rem; color: {% if vix is not none and vix >= 30 %}var(--green){% else %}#fff{% endif %}; font-family: 'Source Code Pro', monospace; font-weight: 700; margin-bottom: 16px;">
-                {{ vix_str }}
-            </div>
-            <div style="font-size: .75rem; color: #999; line-height: 1.6;">
-                <strong>策略含義：</strong>衡量標普500期權的隱含波動率。VIX > 30 常為恐慌；若 VIX > 40，則歷史上極高機率為短期或中長期大底，為<b>強烈抄底訊號</b>。
-            </div>
-        </div>
-
-        <!-- Put/Call Ratio -->
-        <div style="background: linear-gradient(180deg, #121212, #0f0f0f); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 20px;">
-            <div style="font-size: .7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;">Put / Call Ratio</div>
-            <div style="font-size: 1.8rem; color: {% if pcr is not none and pcr >= 1.0 %}var(--green){% else %}#fff{% endif %}; font-family: 'Source Code Pro', monospace; font-weight: 700; margin-bottom: 16px;">
-                {{ pcr_str }}
-            </div>
-            <div style="font-size: .75rem; color: #999; line-height: 1.6;">
-                <strong>策略含義：</strong>當數值 > 1.0 (甚至 > 1.2) 時，說明整個期權市場瘋狂買保險(看跌)，極度悲觀往往是歷史回測最佳的<b>反向作多時機</b>。
-            </div>
-        </div>
-
-        <!-- Shiller P/E -->
-        <div style="background: linear-gradient(180deg, #121212, #0f0f0f); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 20px;">
-            <div style="font-size: .7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;">Shiller P/E (CAPE)</div>
-            <div style="font-size: 1.8rem; color: #fff; font-family: 'Source Code Pro', monospace; font-weight: 700; margin-bottom: 6px;">
-                {{ shiller_pe_value_str }} <span style="font-size: 0.8rem; color: var(--text-dim); font-weight: 400;">({{ shiller_pe_valuation }})</span>
-            </div>
-            <div style="font-size: .75rem; color: #999; line-height: 1.6; margin-top: 16px;">
-                <strong>策略含義：</strong>席勒本益比，排除了景氣循環週期的雜訊，代表大長期的估值基準。<30為非泡沫，若 <b><20 為十年難見買點</b>。
-            </div>
-        </div>
-
-    </div>
-</div>
 
 <!-- PORTFOLIO COMPOSITION -->
 <div class="table-section" style="border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 6px; padding-bottom: 20px;">
@@ -2821,50 +2445,7 @@ TEMPLATE = r"""<!doctype html>
     </div>
     <div style="font-size:.75rem;color:#888;line-height:1.75;">
         <strong style="color:#bbb;">策略摘要：</strong>
-        科技成長（GOOGL、NVDA、TSM、AMZN、MU）為核心，搭配防禦消費（KO、MCD、VISA、UNH）+ 公用事業（AEP、DUK）作為大跌時的護城層。清潔能源（CEG、FSLR）、核能（LEU）對應 AI 電力需求長期主題，。
-    </div>
-</div>
-
-<!-- UPCOMING U.S. MARKET EVENTS -->
-<div class="table-section">
-    <div class="table-header global-events-heading">
-        <span>Upcoming U.S. Market Events · 美國股市事件</span>
-        <a class="global-events-source" href="{{ global_events_source_url }}" target="_blank" rel="noopener noreferrer">
-            {{ global_events_range }} · {{ global_events_status }} · {{ global_events_source_name }}
-        </a>
-    </div>
-    <div class="table-wrapper">
-        <table class="global-events-table">
-            <thead>
-                <tr>
-                    <th>台北時間</th>
-                    <th>地區</th>
-                    <th style="text-align:left;">事件</th>
-                    <th>重要性</th>
-                    <th>共識 / 前值</th>
-                    <th style="text-align:left;">潛在影響</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for event in global_event_items %}
-                <tr>
-                    <td class="event-date-cell">{{ event.date_str }}<span>{{ event.time_str }}</span></td>
-                    <td>{{ event.country }}</td>
-                    <td class="event-name-cell" title="{{ event.description }}">{{ event.event_name }}</td>
-                    <td><span class="importance-badge {{ event.importance_class }}">{{ event.importance }}</span></td>
-                    <td class="event-estimate-cell">{{ event.consensus }}<span>前值 {{ event.previous }}</span></td>
-                    <td class="event-impact-cell">{{ event.impact }}</td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="6" style="text-align:center;color:var(--text-dim);padding:24px;">近期美國事件資料暫時無法取得</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <div class="global-events-note">
-        僅追蹤美國地區事件；事件、時間、共識與前值為已取得資料；重要性與潛在影響為關鍵字規則推論，不代表事件結果或市場方向。時間均已換算為台北時間。
+        科技成長（GOOGL、NVDA、TSM、AMZN、MU）為核心，搭配防禦消費（KO、MCD、VISA、UNH）+ 公用事業（AEP、DUK）作為大跌時的護城層。清潔能源（CEG、FSLR）、核能（LEU）對應 AI 電力需求長期主題。
     </div>
 </div>
 
@@ -2943,7 +2524,6 @@ TEMPLATE = r"""<!doctype html>
     <div class="daily-radar-note">
         分數權重：大盤20、價格技術20、成交量15、相對強度15、籌碼／選擇權15、估值／基本面15。
         選擇權為 Yahoo 公開鏈彙總；滑鼠停留可查看最大合約、量／OI、權利金、成交側與 IV。
-        公開資料無法可靠辨識 sweep、block、spread 或複合部位時，系統不做方向臆測。13F、機構持股及 short 資料具有時滯。
     </div>
 </div>
 
@@ -3089,101 +2669,7 @@ const hashTab = portfolioTabs.find(function (tab) {
 });
 if (hashTab) activatePortfolioTab(hashTab);
 
-const fearGreedLabels = {{ fear_greed_chart_labels | safe }};
-const fearGreedData = {{ fear_greed_chart_data | safe }};
 
-const fgCtx = document.getElementById('fearGreedChart').getContext('2d');
-new Chart(fgCtx, {
-    type: 'line',
-    data: {
-        labels: fearGreedLabels,
-        datasets: [{
-            label: 'CNN Fear & Greed',
-            data: fearGreedData,
-            borderColor: '#c9a84c',
-            backgroundColor: 'rgba(201, 168, 76, 0.12)',
-            borderWidth: 2,
-            fill: true,
-            tension: 0.25,
-            pointRadius: 0,
-            pointHoverRadius: 3
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                backgroundColor: '#1a1a1a',
-                borderColor: '#2a2a2a',
-                borderWidth: 1,
-                titleColor: '#ffffff',
-                bodyColor: '#c9a84c'
-            }
-        },
-        scales: {
-            x: {
-                ticks: { color: '#8a8a8a', maxTicksLimit: 8 },
-                grid: { color: 'rgba(255,255,255,0.04)' }
-            },
-            y: {
-                min: 0,
-                max: 100,
-                ticks: { color: '#8a8a8a', stepSize: 25 },
-                grid: { color: 'rgba(255,255,255,0.06)' }
-            }
-        }
-    }
-});
-
-
-const fgScoreRaw = {{ fear_greed_score if fear_greed_score is not none else 'null' }};
-const fgNeedle = document.getElementById('fearGreedNeedle');
-const fgGaugeScore = document.getElementById('fearGreedGaugeScore');
-
-function clampFearGreedScore(v) {
-    if (v === null || Number.isNaN(Number(v))) return null;
-    return Math.max(0, Math.min(100, Number(v)));
-}
-
-function updateFearGreedGauge(score) {
-    const clamped = clampFearGreedScore(score);
-    if (clamped === null || !fgNeedle) return;
-    const angle = (clamped / 100) * 180;
-    fgNeedle.setAttribute('transform', `rotate(${angle} 320 300)`);
-    if (fgGaugeScore) {
-        fgGaugeScore.textContent = Math.round(clamped).toString();
-    }
-    
-    const fills = ['#eab0a8', '#f2c7a6', '#e8d18d', '#a1d99b', '#74c476'];
-    const strokes = ['#b11235', '#d35400', '#c39d2e', '#31a354', '#006d2c'];
-    const bgFills = ['#e8e8e8', '#e4e4e4', '#dddddd', '#e4e4e4', '#e8e8e8'];
-    
-    let activeIdx = -1;
-    if(clamped <= 24) activeIdx = 0;
-    else if(clamped <= 44) activeIdx = 1;
-    else if(clamped <= 55) activeIdx = 2;
-    else if(clamped <= 74) activeIdx = 3;
-    else activeIdx = 4;
-    
-    for(let i=0; i<5; i++) {
-        const sec = document.getElementById('fg-sector-' + i);
-        if(!sec) continue;
-        if(i === activeIdx) {
-            sec.setAttribute('fill', fills[i]);
-            sec.setAttribute('stroke', strokes[i]);
-            sec.setAttribute('stroke-width', '2');
-        } else {
-            sec.setAttribute('fill', bgFills[i]);
-            sec.removeAttribute('stroke');
-            sec.removeAttribute('stroke-width');
-        }
-    }
-}
-
-updateFearGreedGauge(fgScoreRaw);
 
 const ctx = document.getElementById('holdingsChart').getContext('2d');
 const chartLabels = {{ chart_labels | safe }};
@@ -3285,55 +2771,6 @@ chartObj = new Chart(ctx, {
         }
     }
 });
-</script>
-
-<script>
-const sp5Labels = {{ sp5_chart_labels | safe }};
-const sp5Data = {{ sp5_chart_points | safe }};
-const sp5Ctx = document.getElementById('sp500HistChart').getContext('2d');
-
-new Chart(sp5Ctx, {
-    type: 'line',
-    data: {
-        labels: sp5Labels,
-        datasets: [{
-            label: 'S&P 500 (1Y)',
-            data: sp5Data,
-            borderColor: '#3ddc84',
-            backgroundColor: 'rgba(61, 220, 132, 0.08)',
-            borderWidth: 2,
-            fill: true,
-            tension: 0.1,
-            pointRadius: 0,
-            pointHoverRadius: 4
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                backgroundColor: '#1a1a1a',
-                borderColor: '#2a2a2a',
-                borderWidth: 1,
-                titleColor: '#ffffff',
-                bodyColor: '#3ddc84'
-            }
-        },
-        scales: {
-            x: {
-                ticks: { color: '#8a8a8a', maxTicksLimit: 6 },
-                grid: { color: 'rgba(255,255,255,0.04)' }
-            },
-            y: {
-                ticks: { color: '#8a8a8a' },
-                grid: { color: 'rgba(255,255,255,0.06)' }
-            }
-        }
-    }
-});
 
 // Portfolio Composition Bar
 (function(){
@@ -3402,10 +2839,671 @@ new Chart(sp5Ctx, {
 """
 
 
+
+BOTTOM_FISHING_TEMPLATE = r"""<!doctype html>
+<html lang="zh-TW">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chink Portfolio｜🎯 抄底計畫與反向策略</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Source+Code+Pro:wght@400;600&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>""" + COMMON_STYLES + r"""</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header>
+    <div>
+        <div class="site-title">Chink Portfolio</div>
+        <div class="site-subtitle">Contrarian Strategy · 抄底計畫與大盤指標</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 16px;">
+        <nav style="display: flex; gap: 8px;">
+            <a href="index.html" style="padding: 6px 12px; background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid var(--border); border-radius: 4px; font-family: 'Noto Sans TC', sans-serif; font-size: 0.78rem; font-weight: 500; text-decoration: none;">📈 持倉追蹤總覽</a>
+            <a href="fundamentals.html" style="padding: 6px 12px; background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid var(--border); border-radius: 4px; font-family: 'Noto Sans TC', sans-serif; font-size: 0.78rem; font-weight: 500; text-decoration: none;">📊 持倉估值分析 ↗</a>
+            <a href="bottom_fishing.html" style="padding: 6px 12px; background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue); border-radius: 4px; font-family: 'Noto Sans TC', sans-serif; font-size: 0.78rem; font-weight: 700; text-decoration: none;">🎯 抄底計畫</a>
+        </nav>
+        <div class="meta-time">
+            <strong>Last Updated</strong>
+            {{ updated_at_tw }} 台北時間
+        </div>
+    </div>
+</header>
+
+""" + BUFFETT_QUOTES_JINJA + r"""
+
+    <!-- ── 大盤估值與情緒 ── -->
+    <div class="full-width-card">
+        <div class="chart-label" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>CNN Fear &amp; Greed Index · 恐懼與貪婪指數</span>
+            <a href="https://edition.cnn.com/markets/fear-and-greed" target="_blank" rel="noopener" style="font-size: 0.75rem; font-weight: 500; color: var(--gold-light); text-decoration: none; padding-bottom: 2px;">Data Source ↗</a>
+        </div>
+        <div class="fear-greed-grid">
+            <div class="fear-greed-score">
+                <div class="fear-greed-snapshot-table">
+                    <div class="fear-greed-snapshot-row">
+                        <div>
+                            <div class="fear-greed-snapshot-label">Previous close</div>
+                            <div class="fear-greed-snapshot-rating">{{ fear_greed_prev_rating }}</div>
+                        </div>
+                        <div class="fear-greed-snapshot-badge">{{ fear_greed_prev_str }}</div>
+                    </div>
+                    <div class="fear-greed-snapshot-row">
+                        <div>
+                            <div class="fear-greed-snapshot-label">1 week ago</div>
+                            <div class="fear-greed-snapshot-rating">{{ fear_greed_week_rating }}</div>
+                        </div>
+                        <div class="fear-greed-snapshot-badge">{{ fear_greed_week_score_str }}</div>
+                    </div>
+                    <div class="fear-greed-snapshot-row">
+                        <div>
+                            <div class="fear-greed-snapshot-label">1 month ago</div>
+                            <div class="fear-greed-snapshot-rating">{{ fear_greed_month_rating }}</div>
+                        </div>
+                        <div class="fear-greed-snapshot-badge">{{ fear_greed_month_score_str }}</div>
+                    </div>
+                    <div class="fear-greed-snapshot-row">
+                        <div>
+                            <div class="fear-greed-snapshot-label">1 year ago</div>
+                            <div class="fear-greed-snapshot-rating">{{ fear_greed_year_rating }}</div>
+                        </div>
+                        <div class="fear-greed-snapshot-badge">{{ fear_greed_year_score_str }}</div>
+                    </div>
+                </div>
+                <div class="fear-greed-value">{{ fear_greed_score_str }}</div>
+                <div class="fear-greed-rating">{{ fear_greed_rating }}</div>
+                <div class="fear-greed-meta">前一日：{{ fear_greed_prev_str }}</div>
+                <div class="fear-greed-meta">日變動：
+                    <span class="{% if fear_greed_delta is not none and fear_greed_delta > 0 %}gain-cell{% elif fear_greed_delta is not none and fear_greed_delta < 0 %}loss-cell{% endif %}">
+                        {{ fear_greed_delta_str }}
+                    </span>
+                </div>
+                <div class="fear-greed-meta">區間：0–24 極度恐懼 · 25–44 恐懼 · 45–55 中性 · 56–74 貪婪 · 75–100 極度貪婪</div>
+            </div>
+            <div class="fear-greed-right">
+                <div class="fear-greed-chart-wrap">
+                    <canvas id="bfFearGreedChart"></canvas>
+                </div>
+                <div class="fear-greed-gauge-wrap">
+                    <div class="fear-greed-gauge">
+                        <svg viewBox="0 0 640 340" aria-label="CNN Fear and Greed Gauge">
+                            <path id="bf-fg-sector-0" d="M38 300 A282 282 0 0 1 121.59 100.51 L175.63 154.55 A205.58 205.58 0 0 0 114.42 300 Z" fill="#e8e8e8"/>
+                            <path id="bf-fg-sector-1" d="M125.83 96.42 A282 282 0 0 1 254.96 26.09 L270.57 100.48 A205.58 205.58 0 0 0 179.67 149.97 Z" fill="#e4e4e4"/>
+                            <path id="bf-fg-sector-2" d="M259.83 25.09 A282 282 0 0 1 380.17 25.09 L364.56 99.48 A205.58 205.58 0 0 0 275.44 99.48 Z" fill="#dddddd"/>
+                            <path id="bf-fg-sector-3" d="M385.04 26.09 A282 282 0 0 1 514.17 96.42 L460.33 149.97 A205.58 205.58 0 0 0 369.43 100.48 Z" fill="#e4e4e4"/>
+                            <path id="bf-fg-sector-4" d="M518.41 100.51 A282 282 0 0 1 602 300 L525.58 300 A205.58 205.58 0 0 0 464.37 154.55 Z" fill="#e8e8e8"/>
+
+                            <path d="M114.42 300 A205.58 205.58 0 0 1 525.58 300" fill="none" stroke="#dedede" stroke-width="76" stroke-linecap="butt"/>
+
+                            <text x="175" y="92" class="gauge-label-text" transform="rotate(-33 175 92)">FEAR</text>
+                            <text x="282" y="52" class="gauge-label-text">NEUTRAL</text>
+                            <text x="422" y="92" class="gauge-label-text" transform="rotate(33 422 92)">GREED</text>
+                            <text x="70" y="246" class="gauge-label-text" transform="rotate(-63 70 246)">EXTREME</text>
+                            <text x="76" y="274" class="gauge-label-text" transform="rotate(-63 76 274)">FEAR</text>
+                            <text x="560" y="246" class="gauge-label-text" transform="rotate(63 560 246)">EXTREME</text>
+                            <text x="564" y="274" class="gauge-label-text" transform="rotate(63 564 274)">GREED</text>
+
+                            <text x="145" y="184" class="gauge-tick-text">25</text>
+                            <text x="300" y="132" class="gauge-tick-text">50</text>
+                            <text x="445" y="184" class="gauge-tick-text">75</text>
+                            <text x="112" y="297" class="gauge-tick-text">0</text>
+                            <text x="488" y="297" class="gauge-tick-text">100</text>
+
+                            <circle cx="320" cy="300" r="58" fill="#e7e7e7"/>
+                            <text id="bfFearGreedGaugeScore" x="320" y="340" text-anchor="middle" class="gauge-number">{{ fear_greed_score_str }}</text>
+
+                            <g id="bfFearGreedNeedle" class="gauge-needle">
+                                <rect x="128" y="294" width="192" height="12" fill="#1f1f1f" rx="2" ry="2"/>
+                                <path d="M128 286 L86 300 L128 314 Z" fill="#1f1f1f"/>
+                            </g>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- S&P 500 Trailing P/E -->
+    <div class="full-width-card" style="padding: 24px 36px;">
+        <div class="chart-label" style="display: flex; justify-content: space-between; align-items: baseline;">
+            <span>S&amp;P 500 Trailing P/E · 實際本益比 (近12個月)</span>
+            <a href="{{ sp500_fpe_source_url }}" target="_blank" rel="noopener" style="font-size: 0.75rem; font-weight: 500; color: var(--gold-light); text-decoration: none;">{{ sp500_fpe_source_name }} ↗</a>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 32px; align-items: baseline; margin: 16px 0;">
+            <div>
+                <span style="font-size: 2.2rem; font-family: 'Source Code Pro', monospace; color: var(--gold-light); font-weight: 700;">{{ sp500_fpe_value_str }}</span>
+                <span style="font-size: 0.9rem; color: var(--text-dim); margin-left: 8px;">({{ sp500_fpe_valuation }})</span>
+            </div>
+            <div style="font-size: 0.9rem;">
+                <span style="color: var(--text-dim);">Previous: </span>
+                <strong style="font-family: 'Source Code Pro', monospace; color: #fff;">{{ sp500_fpe_prev_value_str }}</strong>
+            </div>
+            <div style="font-size: 0.9rem;">
+                <span style="color: var(--text-dim);">Delta: </span>
+                <strong class="{% if sp500_fpe_delta is not none and sp500_fpe_delta > 0 %}gain-cell{% elif sp500_fpe_delta is not none and sp500_fpe_delta < 0 %}loss-cell{% endif %}" style="font-family: 'Source Code Pro', monospace;">{{ sp500_fpe_delta_str }}</strong>
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-dim); margin-left: auto;">資料日期：{{ sp500_fpe_date }}</div>
+        </div>
+        <div style="font-size: 0.75rem; color: #888; line-height: 1.6; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.04);">
+            <strong>估值策略解讀：</strong>標準普爾 500 歷史本益比中位數約在 16~18。當 Trailing P/E 壓縮至 20 以下代表評價回歸合理；若跌破 15 則屬少見之歷史超跌區。
+        </div>
+    </div>
+
+    <!-- ── 大盤均線技術面走勢 ── -->
+    <div class="full-width-card" style="padding: 28px 40px;">
+        <div class="chart-label">S&amp;P 500 Technical Trend · 大盤均線技術面</div>
+        <div style="display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 40px; align-items: stretch;">
+            <div>
+                <div style="font-size: 2.2rem; color: #fff; font-family: 'Source Code Pro', monospace; font-weight: 700; line-height: 1.2;">
+                    {{ sp5_price }}
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 24px;">S&amp;P 500 Current Price</div>
+                
+                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
+                    <li style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                        <div>月線 (20MA) 
+                            {% if sp5_b20 %}
+                            <span style="color: var(--red); font-size: 0.7rem; background: var(--red-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">跌破</span>
+                            {% else %}
+                            <span style="color: var(--green); font-size: 0.7rem; background: var(--green-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">有守</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ sp5_ma20 }}</div>
+                    </li>
+                    <li style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                        <div>季線 (60MA) 
+                            {% if sp5_b60 %}
+                            <span style="color: var(--red); font-size: 0.7rem; background: var(--red-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">跌破</span>
+                            {% else %}
+                            <span style="color: var(--green); font-size: 0.7rem; background: var(--green-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">有守</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ sp5_ma60 }}</div>
+                    </li>
+                    <li style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                        <div>年線 (250MA) 
+                            {% if sp5_b250 %}
+                            <span style="color: var(--red); font-size: 0.7rem; background: var(--red-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">跌破</span>
+                            {% else %}
+                            <span style="color: var(--green); font-size: 0.7rem; background: var(--green-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">有守</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ sp5_ma250 }}</div>
+                    </li>
+                    <li style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                        <div>五年線 (1250MA) 
+                            {% if sp5_b1250 %}
+                            <span style="color: var(--red); font-size: 0.7rem; background: var(--red-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">跌破</span>
+                            {% else %}
+                            <span style="color: var(--green); font-size: 0.7rem; background: var(--green-dim); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">有守</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ sp5_ma1250 }}</div>
+                    </li>
+                </ul>
+            </div>
+            <div style="position: relative; min-height: 250px;">
+                <canvas id="sp500HistChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 四級反向抄底訊號面板 ── -->
+    <div class="full-width-card" style="padding: 28px 40px;">
+        <div class="chart-label">Contrarian Bottom-Fishing Signals · 抄底策略指標</div>
+        <div style="font-size: .75rem; color: var(--text-dim); margin-bottom: 24px;">
+            當市場極度恐慌、融資退場、選擇權避險情緒高漲時，往往是相對低點。本區指標皆為反向指標。
+        </div>
+
+        <!-- 抄底訊號判定區域 -->
+        <div style="margin-bottom: 24px; padding: 20px; background: linear-gradient(135deg, rgba(201,168,76,0.05), rgba(0,0,0,0)); border: 1px solid rgba(201,168,76,0.3); border-radius: 6px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+                <!-- B 級 -->
+                <div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <div style="font-size: 1.1rem; color: var(--gold-light); font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                            B 級訊號：開始分批抄底
+                            {% if b_class_signal %}
+                                <span style="background: var(--green); color: #000; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">達成</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-dim);">符合條件：<span style="color: #fff; font-weight: 700;">{{ b_conds_met }} / 6 (需滿4項)</span></div>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 12px;">先打 10%~20% 現金</div>
+                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if b_cond_sp500 %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_sp500 %}●{% else %}○{% endif %}</span> 
+                            S&amp;P 500 距前高跌 10% 以上 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_dd_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if b_cond_vix %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_vix %}●{% else %}○{% endif %}</span> 
+                            VIX &gt; 30 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ vix_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if b_cond_pcr %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_pcr %}●{% else %}○{% endif %}</span> 
+                            Put/Call Ratio &gt; 0.9 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ pcr_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if b_cond_finra %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_finra %}●{% else %}○{% endif %}</span> 
+                            FINRA 融資餘額轉弱 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ finra_mom_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if b_cond_fg %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_fg %}●{% else %}○{% endif %}</span> 
+                            CNN Fear &amp; Greed &lt; 15 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ fear_greed_score_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if b_cond_ma60 %}var(--green){% else %}var(--text-dim){% endif %};">{% if b_cond_ma60 %}●{% else %}○{% endif %}</span> 
+                            S&amp;P 500 跌破季線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if b_cond_ma60 %}跌破{% else %}未破{% endif %})</span>
+                        </li>
+                    </ul>
+                </div>
+                <!-- A 級 -->
+                <div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <div style="font-size: 1.1rem; color: var(--gold-light); font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                            A 級訊號：可以大量抄底
+                            {% if a_class_signal %}
+                                <span style="background: var(--green); color: #000; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">達成</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-dim);">符合條件：<span style="color: #fff; font-weight: 700;">{{ a_conds_met }} / 7 (需滿5項)</span></div>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 12px;">先打 20%~40% 現金</div>
+                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if a_cond_sp500 %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_sp500 %}●{% else %}○{% endif %}</span> 
+                            S&amp;P 500 跌 15%~20% <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_dd_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if a_cond_vix %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_vix %}●{% else %}○{% endif %}</span> 
+                            VIX &gt; 35 或 40 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ vix_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if a_cond_pcr %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_pcr %}●{% else %}○{% endif %}</span> 
+                            Put/Call Ratio &gt; 1.0 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ pcr_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if a_cond_finra_cont %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_finra_cont %}●{% else %}○{% endif %}</span> 
+                            FINRA 融資餘額連續下滑 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ finra_mom_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if a_cond_pe %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_pe %}●{% else %}○{% endif %}</span> 
+                            S&amp;P 500 Trailing P/E &lt; 25 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_fpe_value_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if a_cond_fg %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_fg %}●{% else %}○{% endif %}</span> 
+                            CNN Fear &amp; Greed &lt; 10 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ fear_greed_score_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if a_cond_ma250 %}var(--green){% else %}var(--text-dim){% endif %};">{% if a_cond_ma250 %}●{% else %}○{% endif %}</span> 
+                            S&amp;P 500 跌破年線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if a_cond_ma250 %}跌破{% else %}未破{% endif %})</span>
+                        </li>
+                    </ul>
+                </div>
+                <!-- S 級 -->
+                <div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <div style="font-size: 1.1rem; color: var(--gold-light); font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                            S 級訊號：極端底部
+                            {% if s_class_signal %}
+                                <span style="background: var(--green); color: #000; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">強烈達成</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-dim);">符合條件：<span style="color: #fff; font-weight: 700;">{{ s_conds_met }} / 7 (需滿5項)</span></div>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 12px;">全面建倉 / 重壓</div>
+                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if s_cond_sp500 %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_sp500 %}●{% else %}○{% endif %}</span> 
+                            S&amp;P 500 跌 20% <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_dd_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if s_cond_vix %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_vix %}●{% else %}○{% endif %}</span> 
+                            VIX &gt; 35 或 40 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ vix_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if s_cond_pcr %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_pcr %}●{% else %}○{% endif %}</span> 
+                            Put/Call Ratio &gt; 1.0 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ pcr_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if s_cond_finra_cont %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_finra_cont %}●{% else %}○{% endif %}</span> 
+                            FINRA 融資餘額連續下滑 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ finra_mom_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if s_cond_pe %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_pe %}●{% else %}○{% endif %}</span> 
+                            S&amp;P 500 Trailing P/E &lt; 15 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_fpe_value_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if s_cond_fg %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_fg %}●{% else %}○{% endif %}</span> 
+                            CNN Fear &amp; Greed &lt; 5 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ fear_greed_score_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if s_cond_ma1250 %}var(--green){% else %}var(--text-dim){% endif %};">{% if s_cond_ma1250 %}●{% else %}○{% endif %}</span> 
+                            S&amp;P 500 跌破五年線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if s_cond_ma1250 %}跌破{% else %}未破{% endif %})</span>
+                        </li>
+                    </ul>
+                </div>
+                <!-- SS 級 -->
+                <div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <div style="font-size: 1.1rem; color: #ff4d4d; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                            SS 級訊號：史詩大底
+                            {% if ss_class_signal %}
+                                <span style="background: var(--red); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">財富重分配</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-dim);">符合條件：<span style="color: #fff; font-weight: 700;">{{ ss_conds_met }} / 5 (需滿4項)</span></div>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 12px;">信貸ALL IN / 破產或暴富</div>
+                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem; color: #ccc;">
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if ss_cond_sp500 %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_sp500 %}●{% else %}○{% endif %}</span> 
+                            S&amp;P 500 跌 30% <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ sp500_dd_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if ss_cond_vix %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_vix %}●{% else %}○{% endif %}</span> 
+                            VIX &gt; 40 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ vix_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if ss_cond_pcr %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_pcr %}●{% else %}○{% endif %}</span> 
+                            Put/Call Ratio &gt; 1.2 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ pcr_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if ss_cond_shiller %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_shiller %}●{% else %}○{% endif %}</span> 
+                            Shiller P/E &lt; 20 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({{ shiller_pe_value_str }})</span>
+                        </li>
+                        <li style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: {% if ss_cond_ma1250 %}var(--red){% else %}var(--text-dim){% endif %};">{% if ss_cond_ma1250 %}●{% else %}○{% endif %}</span> 
+                            S&amp;P 500 跌破五年線 <span style="color: var(--text-dim); font-family: 'Source Code Pro', monospace;">({% if ss_cond_ma1250 %}跌破{% else %}未破{% endif %})</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 四大總經反向指標卡片 -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+            <!-- FINRA Margin -->
+            <div style="background: linear-gradient(180deg, #121212, #0f0f0f); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 20px;">
+                <div style="font-size: .7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;">FINRA Margin Debt · 融資餘額</div>
+                <div style="font-size: 1.6rem; color: #fff; font-family: 'Source Code Pro', monospace; font-weight: 700; margin-bottom: 6px;">
+                    {{ finra_val_str }} <span style="font-size: 0.8rem; color: var(--text-dim); font-weight: 400;">百萬 USD</span>
+                </div>
+                <div style="font-family: 'Source Code Pro', monospace; font-size: .78rem; margin-bottom: 16px;">MoM: <span class="{% if finra_mom is not none and finra_mom > 0 %}gain-cell{% elif finra_mom is not none and finra_mom < 0 %}loss-cell{% endif %}">{{ finra_mom_str }}</span></div>
+                <div style="font-size: .75rem; color: #999; line-height: 1.6;">
+                    <strong>策略含義：</strong>代表美股融資(槓桿)餘額。當市場大跌且融資餘額<b>大幅快速下降(斷頭)</b>時，代表籌碼洗淨，有利於底部形成。
+                </div>
+                <div style="font-family: 'Source Code Pro', monospace; font-size: .7rem; color: var(--text-dim); margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.04);">資料月份：{{ finra_month }}</div>
+            </div>
+
+            <!-- Cboe VIX -->
+            <div style="background: linear-gradient(180deg, #121212, #0f0f0f); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 20px;">
+                <div style="font-size: .7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;">CBOE Volatility Index (VIX) · 波動率</div>
+                <div style="font-size: 1.8rem; color: {% if vix is not none and vix >= 30 %}var(--green){% else %}#fff{% endif %}; font-family: 'Source Code Pro', monospace; font-weight: 700; margin-bottom: 16px;">
+                    {{ vix_str }}
+                </div>
+                <div style="font-size: .75rem; color: #999; line-height: 1.6;">
+                    <strong>策略含義：</strong>衡量標普500期權的隱含波動率。VIX &gt; 30 常為恐慌；若 VIX &gt; 40，則歷史上極高機率為短期或中長期大底，為<b>強烈抄底訊號</b>。
+                </div>
+            </div>
+
+            <!-- Put/Call Ratio -->
+            <div style="background: linear-gradient(180deg, #121212, #0f0f0f); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 20px;">
+                <div style="font-size: .7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;">Put / Call Ratio · 看跌看漲比</div>
+                <div style="font-size: 1.8rem; color: {% if pcr is not none and pcr >= 1.0 %}var(--green){% else %}#fff{% endif %}; font-family: 'Source Code Pro', monospace; font-weight: 700; margin-bottom: 16px;">
+                    {{ pcr_str }}
+                </div>
+                <div style="font-size: .75rem; color: #999; line-height: 1.6;">
+                    <strong>策略含義：</strong>當數值 &gt; 1.0 (甚至 &gt; 1.2) 時，說明期權市場瘋狂買看跌保險，極度悲觀往往是歷史回測最佳的<b>反向作多時機</b>。
+                </div>
+            </div>
+
+            <!-- Shiller P/E -->
+            <div style="background: linear-gradient(180deg, #121212, #0f0f0f); border: 1px solid rgba(255,255,255,.06); border-radius: 6px; padding: 20px;">
+                <div style="font-size: .7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;">Shiller P/E (CAPE) · 席勒本益比</div>
+                <div style="font-size: 1.8rem; color: #fff; font-family: 'Source Code Pro', monospace; font-weight: 700; margin-bottom: 6px;">
+                    {{ shiller_pe_value_str }} <span style="font-size: 0.8rem; color: var(--text-dim); font-weight: 400;">({{ shiller_pe_valuation }})</span>
+                </div>
+                <div style="font-size: .75rem; color: #999; line-height: 1.6; margin-top: 16px;">
+                    <strong>策略含義：</strong>排除了景氣循環週期的雜訊，代表超長期的估值基準。&lt; 30 為非泡沫，若 <b>&lt; 20 為十年難見買點</b>。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 自選股深度回檔監控 ── -->
+    <div class="table-section">
+        <div class="table-header">
+            <span>Watchlist Pullback Monitoring · 自選股深度回檔監控</span>
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="text-align: left;">標的代碼</th>
+                        <th>現價 (USD)</th>
+                        <th>Trailing P/E</th>
+                        <th>Forward P/E</th>
+                        <th>距季線乖離</th>
+                        <th>距高點回檔</th>
+                        <th style="text-align: left;">抄底警戒狀態</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in watchlist_items %}
+                    <tr>
+                        <td style="text-align: left;">
+                            <a href="{{ item.quote_url }}" target="_blank" rel="noopener noreferrer" style="color: #fff; font-weight: 700; text-decoration: none;">
+                                {{ item.symbol }}
+                            </a>
+                        </td>
+                        <td style="font-family: 'Source Code Pro', monospace; font-weight: 600;">${{ item.price_str }}</td>
+                        <td style="font-family: 'Source Code Pro', monospace; color: var(--text-dim);">{{ item.tpe_str }}</td>
+                        <td style="font-family: 'Source Code Pro', monospace; color: var(--gold-light);">{{ item.fpe_str }}</td>
+                        <td style="font-family: 'Source Code Pro', monospace;">
+                            {% if item.bias_60 is not none %}
+                                <span class="{% if item.bias_60 >= 0 %}gain-cell{% else %}loss-cell{% endif %}">
+                                    {{ '%.1f' % item.bias_60 }}%
+                                </span>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td style="font-family: 'Source Code Pro', monospace;" class="loss-cell">{{ item.dd_str }}</td>
+                        <td style="text-align: left;">
+                            {% if item.alerts %}
+                                {% for alert in item.alerts %}
+                                    <span style="display: inline-block; padding: 2px 8px; margin-right: 4px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,95,95,0.3);">{{ alert }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span style="color: var(--text-dim); font-size: 0.75rem;">正常追蹤中</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+<!-- ── FOOTER ── -->
+<footer style="border-top: 1px solid var(--border); padding: 28px 40px; text-align: center; color: var(--text-dim); font-size: .75rem; line-height: 1.8;">
+    Chink Portfolio · Contrarian Strategy Dashboard · 本系統資訊僅供個人量化研究與部位管理參考，不構成任何投資建議。
+</footer>
+
+<script>
+// Fear & Greed Needle
+const fgScoreRaw = {{ fear_greed_score if fear_greed_score is not none else 'null' }};
+const fgNeedle = document.getElementById('bfFearGreedNeedle');
+const fgGaugeScore = document.getElementById('bfFearGreedGaugeScore');
+
+function clampFearGreedScore(v) {
+    if (v === null || Number.isNaN(Number(v))) return null;
+    return Math.max(0, Math.min(100, Number(v)));
+}
+
+function updateFearGreedGauge(score) {
+    const clamped = clampFearGreedScore(score);
+    if (clamped === null || !fgNeedle) return;
+    const angle = (clamped / 100) * 180;
+    fgNeedle.setAttribute('transform', `rotate(${angle} 320 300)`);
+    if (fgGaugeScore) {
+        fgGaugeScore.textContent = Math.round(clamped).toString();
+    }
+    
+    const fills = ['#eab0a8', '#f2c7a6', '#e8d18d', '#a1d99b', '#74c476'];
+    const strokes = ['#b11235', '#d35400', '#c39d2e', '#31a354', '#006d2c'];
+    const bgFills = ['#e8e8e8', '#e4e4e4', '#dddddd', '#e4e4e4', '#e8e8e8'];
+    
+    let activeIdx = -1;
+    if(clamped <= 24) activeIdx = 0;
+    else if(clamped <= 44) activeIdx = 1;
+    else if(clamped <= 55) activeIdx = 2;
+    else if(clamped <= 74) activeIdx = 3;
+    else activeIdx = 4;
+    
+    for(let i=0; i<5; i++) {
+        const sec = document.getElementById('bf-fg-sector-' + i);
+        if(!sec) continue;
+        if(i === activeIdx) {
+            sec.setAttribute('fill', fills[i]);
+            sec.setAttribute('stroke', strokes[i]);
+            sec.setAttribute('stroke-width', '2');
+        } else {
+            sec.setAttribute('fill', bgFills[i]);
+            sec.removeAttribute('stroke');
+            sec.removeAttribute('stroke-width');
+        }
+    }
+}
+updateFearGreedGauge(fgScoreRaw);
+
+// Fear & Greed 1Y Historical Line Chart
+const fgLabels = {{ fear_greed_chart_labels | safe }};
+const fgData = {{ fear_greed_chart_data | safe }};
+const bfFgCanvas = document.getElementById('bfFearGreedChart');
+
+if (bfFgCanvas && fgLabels && fgLabels.length > 0) {
+    const bfFgCtx = bfFgCanvas.getContext('2d');
+    new Chart(bfFgCtx, {
+        type: 'line',
+        data: {
+            labels: fgLabels,
+            datasets: [{
+                label: 'CNN Fear & Greed',
+                data: fgData,
+                borderColor: '#c9a84c',
+                backgroundColor: 'rgba(201, 168, 76, 0.12)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.25,
+                pointRadius: 0,
+                pointHoverRadius: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1a1a1a',
+                    borderColor: '#2a2a2a',
+                    borderWidth: 1,
+                    titleColor: '#ffffff',
+                    bodyColor: '#c9a84c'
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#8a8a8a', maxTicksLimit: 8 },
+                    grid: { color: 'rgba(255,255,255,0.04)' }
+                },
+                y: {
+                    min: 0,
+                    max: 100,
+                    ticks: { color: '#8a8a8a', stepSize: 25 },
+                    grid: { color: 'rgba(255,255,255,0.06)' }
+                }
+            }
+        }
+    });
+}
+
+// S&P 500 Historical Chart
+const sp5Labels = {{ sp5_chart_labels | safe }};
+const sp5Data = {{ sp5_chart_points | safe }};
+const sp5Canvas = document.getElementById('sp500HistChart');
+
+if (sp5Canvas && sp5Labels && sp5Labels.length > 0) {
+    const sp5Ctx = sp5Canvas.getContext('2d');
+    new Chart(sp5Ctx, {
+        type: 'line',
+        data: {
+            labels: sp5Labels,
+            datasets: [{
+                label: 'S&P 500 (1Y)',
+                data: sp5Data,
+                borderColor: '#3ddc84',
+                backgroundColor: 'rgba(61, 220, 132, 0.08)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.1,
+                pointRadius: 0,
+                pointHoverRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1a1a1a',
+                    borderColor: '#2a2a2a',
+                    borderWidth: 1,
+                    titleColor: '#ffffff',
+                    bodyColor: '#3ddc84'
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#8a8a8a', maxTicksLimit: 6 },
+                    grid: { color: 'rgba(255,255,255,0.04)' }
+                },
+                y: {
+                    ticks: { color: '#8a8a8a' },
+                    grid: { color: 'rgba(255,255,255,0.06)' }
+                }
+            }
+        }
+    });
+}
+</script>
+</body>
+</html>
+"""
+
+
 # ================== 路由 ==================
 @app.route("/")
+@app.route("/index.html")
 def watchlist_only():
-    return render_template_string(TEMPLATE, **_build_portfolio_snapshot())
+    snapshot = Path(__file__).resolve().parent / "docs" / "index.html"
+    if snapshot.is_file():
+        return send_file(snapshot, mimetype="text/html")
+    return render_portfolio_html()
+
+@app.route("/bottom_fishing.html")
+@app.route("/bottom_fishing")
+def bottom_fishing_route():
+    snapshot = Path(__file__).resolve().parent / "docs" / "bottom_fishing.html"
+    if snapshot.is_file():
+        return send_file(snapshot, mimetype="text/html")
+    return render_bottom_fishing_html()
 
 @app.get("/health")
 def health():
@@ -3413,7 +3511,11 @@ def health():
 
 def render_portfolio_html():
     with app.app_context():
-        return render_template_string(TEMPLATE, **_build_portfolio_snapshot())
+        return render_template_string(INDEX_TEMPLATE, **_build_portfolio_snapshot())
+
+def render_bottom_fishing_html():
+    with app.app_context():
+        return render_template_string(BOTTOM_FISHING_TEMPLATE, **_build_portfolio_snapshot())
 
 def main():
     parser = argparse.ArgumentParser(description="Portfolio watchlist server / static site generator")
@@ -3427,6 +3529,11 @@ def main():
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(html, encoding="utf-8")
         print(f"Wrote portfolio page to {output_path}")
+
+        bf_path = output_path.parent / "bottom_fishing.html"
+        bf_html = render_bottom_fishing_html()
+        bf_path.write_text(bf_html, encoding="utf-8")
+        print(f"Wrote bottom fishing page to {bf_path}")
         if not args.serve:
             return
 

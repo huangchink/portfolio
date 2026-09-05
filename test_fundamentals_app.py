@@ -9,6 +9,53 @@ import fundamentals_app as dashboard
 
 
 class FundamentalCalculationsTest(unittest.TestCase):
+    def test_overview_navigation_serves_snapshot_without_fetching_quotes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docs").mkdir()
+            (root / "docs" / "index.html").write_text(
+                "<!doctype html><title>Portfolio overview</title>", encoding="utf-8"
+            )
+            with patch.object(dashboard, "PROJECT_ROOT", root), patch.object(
+                dashboard, "build_dashboard_data", side_effect=AssertionError("Unexpected fetch")
+            ):
+                response = dashboard.app.test_client().get("/index.html")
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(b"Portfolio overview", response.data)
+                response.close()
+
+    def test_fundamentals_navigation_returns_to_dashboard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docs").mkdir()
+            (root / "docs" / "fundamentals.html").write_text(
+                "<!doctype html><title>Fundamentals dashboard</title>", encoding="utf-8"
+            )
+            with patch.object(dashboard, "PROJECT_ROOT", root):
+                response = dashboard.app.test_client().get("/fundamentals.html")
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(b"Fundamentals dashboard", response.data)
+                response.close()
+
+    def test_bottom_fishing_navigation_serves_snapshot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docs").mkdir()
+            (root / "docs" / "bottom_fishing.html").write_text(
+                "<!doctype html><title>Bottom Fishing Plan</title>", encoding="utf-8"
+            )
+            with patch.object(dashboard, "PROJECT_ROOT", root):
+                response = dashboard.app.test_client().get("/bottom_fishing.html")
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(b"Bottom Fishing Plan", response.data)
+                response.close()
+
+    def test_assets_route_serves_css(self):
+        response = dashboard.app.test_client().get("/assets/dashboard.css")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b":root", response.data)
+        response.close()
+
     def test_buyback_ttm_sums_latest_four_cash_outflows(self):
         cashflow = pd.DataFrame(
             {

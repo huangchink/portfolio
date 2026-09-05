@@ -27,7 +27,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 from bs4 import BeautifulSoup
-from flask import Flask, render_template
+from flask import Flask, render_template, send_file, send_from_directory
 from pytz import timezone
 
 
@@ -649,8 +649,45 @@ def render_dashboard(
 
 
 @app.get("/")
-def index() -> str:
+@app.get("/fundamentals.html")
+def index():
+    snapshot = PROJECT_ROOT / "docs" / "fundamentals.html"
+    if snapshot.is_file():
+        return send_file(snapshot, mimetype="text/html")
     return render_dashboard()
+
+
+@app.get("/index.html")
+def portfolio_overview():
+    """Serve the overview linked from the fundamentals navigation."""
+    snapshot = PROJECT_ROOT / "docs" / "index.html"
+    if snapshot.is_file():
+        return send_file(snapshot, mimetype="text/html")
+    # A fresh checkout may not have a generated snapshot yet.
+    from portfolio import render_portfolio_html
+
+    return render_portfolio_html()
+
+
+@app.get("/bottom_fishing.html")
+@app.get("/bottom_fishing")
+def bottom_fishing():
+    """Serve the bottom-fishing strategy linked from navigation."""
+    snapshot = PROJECT_ROOT / "docs" / "bottom_fishing.html"
+    if snapshot.is_file():
+        return send_file(snapshot, mimetype="text/html")
+    from portfolio import render_bottom_fishing_html
+
+    return render_bottom_fishing_html()
+
+
+@app.get("/assets/<path:filename>")
+def serve_assets(filename: str):
+    """Serve static assets referenced by docs HTML snapshots."""
+    asset_dir = PROJECT_ROOT / "docs" / "assets"
+    if (asset_dir / filename).is_file():
+        return send_from_directory(asset_dir, filename)
+    return send_from_directory(PROJECT_ROOT / "static", filename)
 
 
 @app.get("/health")
