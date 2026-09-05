@@ -186,6 +186,58 @@ button { color: inherit; }
   line-height: 1.7;
 }
 
+.quote-banner {
+  border-bottom: 1px solid var(--line);
+}
+
+.quote-card {
+  position: relative;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 24px clamp(20px, 4vw, 48px) 24px clamp(48px, 6vw, 68px);
+  overflow: hidden;
+}
+
+.quote-card::before {
+  content: "“";
+  font-family: var(--mono);
+  font-size: 5rem;
+  color: var(--acid);
+  position: absolute;
+  top: -12px;
+  left: 16px;
+  line-height: 1;
+  opacity: 0.35;
+}
+
+.quote-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--acid);
+}
+
+.quote-text {
+  font-family: var(--sans);
+  font-size: clamp(13px, 1.3vw, 16px);
+  color: var(--paper);
+  line-height: 1.7;
+  font-weight: 500;
+  position: relative;
+  z-index: 1;
+}
+
+.quote-author {
+  margin-top: 8px;
+  font: 500 10px var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--acid);
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -863,9 +915,40 @@ footer a { justify-self: end; color: var(--paper); font-size: 10px; text-decorat
 .dialog-metric small { display: block; margin-bottom: 18px; color: var(--muted); font-size: 8px; }
 .dialog-metric strong { font: 500 15px var(--mono); }
 
-.dialog-commentary { margin-top: 34px; }
-.dialog-commentary h3 { margin: 0 0 10px; font-size: 11px; }
-.dialog-commentary p { margin: 0; color: #56605a; font-size: 11px; line-height: 1.8; }
+.dialog-commentary {
+  margin-top: 32px;
+  padding: 22px;
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
+}
+.dialog-commentary h3 {
+  margin: 0 0 16px;
+  font: 500 11px var(--mono);
+  color: var(--ink);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.commentary-block {
+  margin-bottom: 16px;
+}
+.commentary-block:last-child {
+  margin-bottom: 0;
+}
+.commentary-label {
+  display: inline-block;
+  padding: 3px 8px;
+  margin-bottom: 7px;
+  background: var(--ink);
+  color: var(--acid);
+  font: 500 9px var(--mono);
+  letter-spacing: 0.06em;
+}
+.commentary-text {
+  margin: 0;
+  color: #434d47;
+  font-size: 11px;
+  line-height: 1.8;
+}
 
 .dialog-position { margin: 28px 0; padding: 18px 0; display: grid; grid-template-columns: repeat(3, 1fr); border-block: 1px solid var(--line); }
 .dialog-position span { padding: 0 14px; border-right: 1px solid var(--line); }

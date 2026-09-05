@@ -87,6 +87,60 @@ FULL_PORTFOLIO = [
     {"symbol": "YUM", "shares": 2, "cost": 144.73},
 ]
 
+COMPANY_DESCRIPTIONS = {
+    "AAPL": "Apple 設計 iPhone、Mac、iPad 與穿戴裝置，並經營 App Store、iCloud、Apple Music 等服務生態系。",
+    "AEP": "American Electric Power 是美國受監管的電力公用事業，營運發電、輸電與配電網路。",
+    "AMZN": "Amazon 經營電商、市集與物流服務，並透過 AWS 提供雲端運算，以及發展數位廣告業務。",
+    "AXP": "American Express 同時是信用卡發卡商、支付網路與旅遊服務商，主要服務中高消費客群及企業。",
+    "CDNS": "Cadence 提供電子設計自動化軟體、系統分析工具與半導體 IP，協助客戶設計晶片與電子系統。",
+    "CEG": "Constellation Energy 是美國大型低碳電力供應商，以核能發電為核心，也經營天然氣與零售電力。",
+    "CVX": "Chevron 是綜合能源公司，涵蓋石油天然氣探勘生產、煉油、化學品與能源銷售。",
+    "DIS": "Disney 經營電影與電視內容、Disney+ 串流、ESPN 體育媒體，以及主題樂園與授權商品。",
+    "DUK": "Duke Energy 是美國受監管的電力與天然氣公用事業，主要收入來自供電、配電與基礎設施投資。",
+    "GOOGL": "Alphabet 以 Google 搜尋與 YouTube 廣告為核心，同時經營 Google Cloud、Android 與人工智慧產品。",
+    "HUBB": "Hubbell 製造電氣與公用事業基礎設施產品，服務電網、配電、工業與建築市場。",
+    "HIMX": "奇景光電是無晶圓廠 IC 設計公司，主力為顯示器驅動晶片、影像感測與相關半導體解決方案。",
+    "INTC": "Intel 設計個人電腦與資料中心處理器，也投資自有晶圓製造並發展對外晶圓代工服務。",
+    "JNJ": "Johnson & Johnson 聚焦創新製藥與醫療科技，產品涵蓋腫瘤、免疫、外科與介入式醫材。",
+    "KO": "Coca-Cola 經營全球非酒精飲料品牌，主要透過濃縮液銷售、品牌授權與合作裝瓶網路獲利。",
+    "LEU": "Centrus Energy 供應核燃料與濃縮鈾服務，並發展美國本土高濃度低濃縮鈾（HALEU）產能。",
+    "LULU": "Lululemon 設計與直營運動服飾、鞋類及配件，核心品類包括瑜伽、跑步與日常機能服。",
+    "MCD": "McDonald's 以全球加盟餐廳為主，收入來自加盟權利金、租金及部分自營餐廳。",
+    "META": "Meta 經營 Facebook、Instagram、WhatsApp 等社群平台，以數位廣告為主，並投入 AI 與虛擬實境。",
+    "MSFT": "Microsoft 提供企業軟體、Azure 雲端、Windows、Microsoft 365、遊戲與人工智慧服務。",
+    "MU": "Micron 生產 DRAM、NAND 快閃記憶體與儲存產品，供應資料中心、行動裝置、汽車與消費電子。",
+    "NVDA": "NVIDIA 提供 GPU、AI 加速器、網路設備與軟體平台，核心市場涵蓋資料中心、遊戲與專業視覺運算。",
+    "NFLX": "Netflix 提供全球訂閱制影音串流，投資自製內容，並拓展含廣告方案與遊戲等服務。",
+    "PEP": "PepsiCo 經營全球零食與飲料品牌，主要事業包括 Frito-Lay、Quaker、Pepsi 與 Gatorade。",
+    "QCOM": "Qualcomm 設計行動通訊與無線連網晶片，並透過專利授權取得技術權利金。",
+    "SIMO": "慧榮科技設計 NAND 快閃記憶體控制晶片，應用於 SSD、嵌入式儲存與資料中心。",
+    "SNDK": "SanDisk 提供 NAND 快閃記憶體與儲存產品，服務消費電子、企業與資料中心市場。",
+    "SNPS": "Synopsys 提供晶片設計自動化軟體、驗證工具與半導體 IP，是先進晶片研發的重要供應商。",
+    "TSLA": "Tesla 生產電動車，並經營能源儲存、太陽能、充電網路與自動駕駛相關軟體。",
+    "TSM": "台積電是專業晶圓代工公司，替全球客戶製造先進與成熟製程半導體。",
+    "TPR": "Tapestry 是精品集團，旗下品牌包括 Coach、Kate Spade 與 Stuart Weitzman，主力為皮件與配飾。",
+    "UNH": "UnitedHealth Group 透過 UnitedHealthcare 提供健康保險，並以 Optum 經營醫療照護、藥事與資料服務。",
+    "V": "Visa 營運全球電子支付網路，連結發卡行、收單行、商戶與消費者，本身通常不承擔信用風險。",
+    "VST": "Vistra 在美國競爭型電力市場經營發電與零售售電，資產組合包含核能、天然氣與儲能。",
+    "YUM": "Yum! Brands 以加盟模式經營 KFC、Pizza Hut、Taco Bell 與 Habit Burger 等餐飲品牌。",
+}
+
+BUFFETT_QUOTES = [
+    "投資的第一條規則是永遠不要賠錢。第二條規則是永遠不要忘記第一條，所以要買台積。",
+    "價格是你所付出的，價值是你所得到的。",
+    "如果找不到在睡覺時也能賺錢的方法，你將會工作一輩子到死(所以台股買台積 美股買TSM)。",
+    "以合理的價格買下一家好公司，比用便宜的價格買下一家普通的公司好得多。",
+    "別人恐懼我貪婪，別人貪婪我恐懼。",
+    "如果你沒有持有一檔股票(台積) 10 年的想法，那連 10 分鐘都不要持有。",
+    "只有當潮水退去時，才知道誰在裸泳(沒買台積)。",
+    "分散投資是無知的保護傘，對於那些知道自己在做什麼的人來說，這意義不大，所以要全倉台積。",
+    "不要投資於你不了解的事物。所以要投資台積",
+    "ALL IN 台積就對了",
+    "我們不必比別人聰明，我們只需要比別人更有紀律，死抱台積。",
+    "最成功的交易是做自己喜歡的事。所以要當台積股東",
+    "最好的投資就是投資自己，還有台積。",
+]
+
 SECTOR_NAMES = {
     "Technology": "科技",
     "Communication Services": "通訊服務",
@@ -306,6 +360,8 @@ def _empty_snapshot(position: dict[str, Any], error: str | None = None) -> dict[
         "symbol": position["symbol"],
         "name": position["symbol"],
         "sector": "其他",
+        "industry": None,
+        "business_description": COMPANY_DESCRIPTIONS.get(position["symbol"], ""),
         "shares": shares,
         "cost": cost,
         "cost_basis": shares * cost,
@@ -316,6 +372,7 @@ def _empty_snapshot(position: dict[str, Any], error: str | None = None) -> dict[
         "trailing_pe": None,
         "forward_pe": None,
         "roa": None,
+        "roe": None,
         "ath": None,
         "ath_distance": None,
         "buyback_ttm": None,
@@ -388,17 +445,24 @@ def fetch_stock_snapshot(
     forward_pe = _positive_metric(info.get("forwardPE"))
     roa_raw = _safe_float(info.get("returnOnAssets"))
     roa = roa_raw * 100 if roa_raw is not None else None
+    roe_raw = _safe_float(info.get("returnOnEquity"))
+    roe = roe_raw * 100 if roe_raw is not None else None
 
     item.update(
         {
             "name": info.get("shortName") or info.get("longName") or position["symbol"],
             "sector": SECTOR_NAMES.get(info.get("sector"), info.get("sector") or "其他"),
+            "industry": info.get("industry"),
+            "business_description": COMPANY_DESCRIPTIONS.get(position["symbol"])
+            or info.get("longBusinessSummary")
+            or "尚無公司業務描述。",
             "price": price,
             "market_value": market_value,
             "roi": roi,
             "trailing_pe": trailing_pe,
             "forward_pe": forward_pe,
             "roa": roa,
+            "roe": roe,
             "ath": ath,
             "ath_distance": min(ath_distance, 0.0) if ath_distance is not None else None,
             "buyback_ttm": buyback,
@@ -517,11 +581,16 @@ def build_dashboard_data(max_workers: int = 4) -> dict[str, Any]:
         if total_market_value and total_cost
         else None
     )
-    forward_values = sorted(
-        item["forward_pe"] for item in items if item.get("forward_pe") is not None
+    unrealized_profit = (
+        total_market_value - total_cost if total_market_value is not None else None
     )
-    median_forward_pe = (
-        float(pd.Series(forward_values).median()) if forward_values else None
+    top_10_value = sum(
+        sorted(
+            (item.get("market_value") or 0 for item in items), reverse=True
+        )[:10]
+    )
+    top_10_concentration = (
+        top_10_value / total_market_value * 100 if total_market_value else None
     )
     sectors: dict[str, float] = {}
     for item in items:
@@ -538,10 +607,13 @@ def build_dashboard_data(max_workers: int = 4) -> dict[str, Any]:
         for name, value in sorted(sectors.items(), key=lambda pair: pair[1], reverse=True)
     ]
 
+    now_taipei = datetime.now(timezone("Asia/Taipei"))
+    day_of_year = now_taipei.timetuple().tm_yday
+    today_quote = BUFFETT_QUOTES[day_of_year % len(BUFFETT_QUOTES)]
+
     return {
-        "generated_at": datetime.now(timezone("Asia/Taipei")).strftime(
-            "%Y.%m.%d %H:%M TPE"
-        ),
+        "generated_at": now_taipei.strftime("%Y.%m.%d %H:%M TPE"),
+        "today_quote": today_quote,
         "items": items,
         "sector_mix": sector_mix,
         "summary": {
@@ -549,17 +621,13 @@ def build_dashboard_data(max_workers: int = 4) -> dict[str, Any]:
             "total_market_value": total_market_value or None,
             "total_cost": total_cost,
             "total_roi": total_roi,
-            "median_forward_pe": median_forward_pe,
-            "weighted_roa": _weighted_average(items, "roa"),
-            "buyback_count": sum(item.get("is_buying_back") is True for item in items),
-            "near_ath_count": sum(
-                item.get("ath_distance") is not None and item["ath_distance"] >= -10
-                for item in items
-            ),
+            "unrealized_profit": unrealized_profit,
+            "top_10_concentration": top_10_concentration,
             "coverage_count": sum(
                 item.get("trailing_pe") is not None
                 or item.get("forward_pe") is not None
                 or item.get("roa") is not None
+                or item.get("roe") is not None
                 for item in items
             ),
         },
