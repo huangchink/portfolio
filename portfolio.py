@@ -800,6 +800,13 @@ def fetch_macromicro_sp500_forward_pe():
         'valuation': 'N/A',
         'source_name': 'Multpl.com / S&P 500 Trailing P/E',
         'source_url': SP500_FPE_SOURCE_URL,
+        'chart_labels': '[]',
+        'chart_data': '[]',
+        'chart_avg': '[]',
+        'avg_10y': None,
+        'avg_10y_str': 'N/A',
+        'min_10y_str': 'N/A',
+        'max_10y_str': 'N/A',
     }
 
     try:
@@ -822,6 +829,24 @@ def fetch_macromicro_sp500_forward_pe():
         else:
             valuation = '偏便宜'
 
+        # 過去 10 年 (120 個月) 歷史走勢與 10 年平均線
+        rows_10y = list(reversed(rows[:120]))
+        chart_labels = []
+        chart_data = []
+        for d_str, v in rows_10y:
+            try:
+                dt = datetime.strptime(d_str.strip(), '%b %d, %Y')
+                label = dt.strftime('%Y/%m')
+            except Exception:
+                label = d_str.strip()
+            chart_labels.append(label)
+            chart_data.append(round(v, 2))
+
+        avg_10y = round(sum(chart_data) / len(chart_data), 2) if chart_data else None
+        chart_avg = [avg_10y] * len(chart_data) if avg_10y is not None else []
+        min_10y = min(chart_data) if chart_data else None
+        max_10y = max(chart_data) if chart_data else None
+
         return {
             'value': latest_value,
             'value_str': f'{latest_value:.2f}',
@@ -833,6 +858,13 @@ def fetch_macromicro_sp500_forward_pe():
             'valuation': valuation,
             'source_name': 'Multpl.com / S&P 500 Trailing P/E',
             'source_url': SP500_FPE_SOURCE_URL,
+            'chart_labels': json.dumps(chart_labels),
+            'chart_data': json.dumps(chart_data),
+            'chart_avg': json.dumps(chart_avg),
+            'avg_10y': avg_10y,
+            'avg_10y_str': f'{avg_10y:.2f}' if avg_10y is not None else 'N/A',
+            'min_10y_str': f'{min_10y:.2f}' if min_10y is not None else 'N/A',
+            'max_10y_str': f'{max_10y:.2f}' if max_10y is not None else 'N/A',
         }
     except Exception as e:
         print(f'Error fetching S&P 500 P/E: {e}')
@@ -1475,6 +1507,12 @@ def _build_portfolio_snapshot():
         "sp500_fpe_valuation": sp500_fpe["valuation"],
         "sp500_fpe_source_name": sp500_fpe["source_name"],
         "sp500_fpe_source_url": sp500_fpe["source_url"],
+        "sp500_fpe_chart_labels": sp500_fpe.get("chart_labels", "[]"),
+        "sp500_fpe_chart_data": sp500_fpe.get("chart_data", "[]"),
+        "sp500_fpe_chart_avg": sp500_fpe.get("chart_avg", "[]"),
+        "sp500_fpe_avg_10y_str": sp500_fpe.get("avg_10y_str", "N/A"),
+        "sp500_fpe_min_10y_str": sp500_fpe.get("min_10y_str", "N/A"),
+        "sp500_fpe_max_10y_str": sp500_fpe.get("max_10y_str", "N/A"),
         "watchlist_items": watchlist_items,
         "day_of_year": day_of_year,
         "finra_val_str": finra_margin.get("val_str", "N/A"),
@@ -1625,49 +1663,68 @@ COMMON_STYLES = r"""
         /* ── BUFFETT QUOTE BANNER ── */
         .quote-banner {
             max-width: 1100px;
-            margin: 32px auto 0;
+            margin: 28px auto 0;
             padding: 0 40px;
         }
         .quote-card {
             position: relative;
-            background: linear-gradient(135deg, #13100a 0%, #1a1408 50%, #13100a 100%);
-            border: 1px solid var(--gold-dim);
-            border-radius: 4px;
-            padding: 28px 36px 28px 60px;
+            background: linear-gradient(135deg, rgba(26, 21, 12, 0.75) 0%, rgba(18, 15, 10, 0.9) 100%);
+            border: 1px solid rgba(201, 168, 76, 0.22);
+            border-radius: 6px;
+            padding: 24px 36px 24px 54px;
             overflow: hidden;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            transition: border-color 0.25s ease, box-shadow 0.25s ease;
+        }
+        .quote-card:hover {
+            border-color: rgba(201, 168, 76, 0.38);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 20px rgba(201, 168, 76, 0.06);
         }
         .quote-card::before {
             content: '\201C';
-            font-family: 'Playfair Display', serif;
-            font-size: 8rem;
-            color: var(--gold-dim);
+            font-family: 'Lora', 'Cormorant Garamond', Georgia, serif;
+            font-size: 5rem;
+            color: var(--gold);
             position: absolute;
-            top: -20px; left: 16px;
+            top: -10px;
+            left: 14px;
             line-height: 1;
-            opacity: .5;
+            opacity: 0.18;
+            pointer-events: none;
+            user-select: none;
         }
         .quote-card::after {
             content: '';
             position: absolute;
-            top: 0; left: 0;
-            width: 3px; height: 100%;
-            background: linear-gradient(180deg, var(--gold), var(--gold-dim));
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+            background: linear-gradient(180deg, var(--gold), rgba(201, 168, 76, 0.2));
+            border-radius: 6px 0 0 6px;
         }
         .quote-text {
-            font-family: 'Playfair Display', serif;
+            font-family: 'Lora', 'Cormorant Garamond', 'Noto Serif TC', Georgia, serif;
             font-style: italic;
-            font-size: clamp(.95rem, 2vw, 1.15rem);
-            color: #e8d9b0;
-            line-height: 1.8;
+            font-weight: 500;
+            font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+            color: #f6eedb;
+            line-height: 1.75;
+            letter-spacing: 0.3px;
             position: relative;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
         .quote-author {
-            margin-top: 12px;
-            font-size: .7rem;
+            margin-top: 10px;
+            font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: .72rem;
             letter-spacing: 2px;
             text-transform: uppercase;
             color: var(--gold);
             font-weight: 500;
+            opacity: 0.9;
         }
 
         /* ── MAIN LAYOUT ── */
@@ -2299,7 +2356,7 @@ INDEX_TEMPLATE = r"""<!doctype html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chink Portfolio｜持倉追蹤總覽</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Source+Code+Pro:wght@400;600&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@400;500;600&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
     <style>""" + COMMON_STYLES + r"""</style>
 </head>
 <body>
@@ -2840,6 +2897,15 @@ chartObj = new Chart(ctx, {
 
 
 
+BOTTOM_FISHING_QUOTE_BANNER = r"""
+<div class="quote-banner">
+    <div class="quote-card">
+        <div class="quote-text">“Be fearful when others are greedy, and be greedy when others are fearful.”</div>
+        <div class="quote-author">— Warren Buffett · 巴菲特</div>
+    </div>
+</div>
+"""
+
 BOTTOM_FISHING_TEMPLATE = r"""<!doctype html>
 <html lang="zh-TW">
 <head>
@@ -2847,7 +2913,7 @@ BOTTOM_FISHING_TEMPLATE = r"""<!doctype html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chink Portfolio｜🎯 抄底計畫與反向策略</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Source+Code+Pro:wght@400;600&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@400;500;600&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
     <style>""" + COMMON_STYLES + r"""</style>
 </head>
 <body>
@@ -2871,7 +2937,7 @@ BOTTOM_FISHING_TEMPLATE = r"""<!doctype html>
     </div>
 </header>
 
-""" + BUFFETT_QUOTES_JINJA + r"""
+""" + BOTTOM_FISHING_QUOTE_BANNER + r"""
 
     <!-- ── 大盤估值與情緒 ── -->
     <div class="full-width-card">
@@ -2964,16 +3030,24 @@ BOTTOM_FISHING_TEMPLATE = r"""<!doctype html>
         </div>
     </div>
 
-    <!-- S&P 500 Trailing P/E -->
+    <!-- S&P 500 Trailing P/E & 10Y Historical Chart -->
     <div class="full-width-card" style="padding: 24px 36px;">
         <div class="chart-label" style="display: flex; justify-content: space-between; align-items: baseline;">
-            <span>S&amp;P 500 Trailing P/E · 實際本益比 (近12個月)</span>
+            <span>S&amp;P 500 Trailing P/E · 實際本益比與近10年走勢</span>
             <a href="{{ sp500_fpe_source_url }}" target="_blank" rel="noopener" style="font-size: 0.75rem; font-weight: 500; color: var(--gold-light); text-decoration: none;">{{ sp500_fpe_source_name }} ↗</a>
         </div>
-        <div style="display: flex; flex-wrap: wrap; gap: 32px; align-items: baseline; margin: 16px 0;">
+        <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: baseline; margin: 16px 0 12px 0;">
             <div>
                 <span style="font-size: 2.2rem; font-family: 'Source Code Pro', monospace; color: var(--gold-light); font-weight: 700;">{{ sp500_fpe_value_str }}</span>
                 <span style="font-size: 0.9rem; color: var(--text-dim); margin-left: 8px;">({{ sp500_fpe_valuation }})</span>
+            </div>
+            <div style="font-size: 0.9rem; background: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.25); border-radius: 6px; padding: 4px 12px;">
+                <span style="color: #93c5fd; font-size: 0.8rem;">10年平均線: </span>
+                <strong style="font-family: 'Source Code Pro', monospace; color: #60a5fa; font-size: 1.05rem;">{{ sp500_fpe_avg_10y_str }}</strong>
+            </div>
+            <div style="font-size: 0.9rem;">
+                <span style="color: var(--text-dim);">近10年區間: </span>
+                <strong style="font-family: 'Source Code Pro', monospace; color: #ccc;">{{ sp500_fpe_min_10y_str }} ~ {{ sp500_fpe_max_10y_str }}</strong>
             </div>
             <div style="font-size: 0.9rem;">
                 <span style="color: var(--text-dim);">Previous: </span>
@@ -2985,8 +3059,14 @@ BOTTOM_FISHING_TEMPLATE = r"""<!doctype html>
             </div>
             <div style="font-size: 0.78rem; color: var(--text-dim); margin-left: auto;">資料日期：{{ sp500_fpe_date }}</div>
         </div>
+
+        <!-- 10年本益比走勢折線圖 -->
+        <div style="height: 250px; margin: 16px 0 16px 0;">
+            <canvas id="sp500PeChart"></canvas>
+        </div>
+
         <div style="font-size: 0.75rem; color: #888; line-height: 1.6; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.04);">
-            <strong>估值策略解讀：</strong>標準普爾 500 歷史本益比中位數約在 16~18。當 Trailing P/E 壓縮至 20 以下代表評價回歸合理；若跌破 15 則屬少見之歷史超跌區。
+            <strong>估值策略解讀：</strong>標準普爾 500 近 10 年平均 Trailing P/E 為 <strong style="color: #60a5fa; font-family: 'Source Code Pro', monospace;">{{ sp500_fpe_avg_10y_str }}</strong>（藍色虛線），歷史長期中位數約在 16~18。當 Trailing P/E 壓縮至 10 年均線以下或低於 25 時代表評價回歸合理並符合 A 級抄底標準；若跌破 15 則屬少見之歷史超跌區（符合 S 級抄底）。
         </div>
     </div>
 
@@ -3472,6 +3552,92 @@ if (sp5Canvas && sp5Labels && sp5Labels.length > 0) {
             scales: {
                 x: {
                     ticks: { color: '#8a8a8a', maxTicksLimit: 6 },
+                    grid: { color: 'rgba(255,255,255,0.04)' }
+                },
+                y: {
+                    ticks: { color: '#8a8a8a' },
+                    grid: { color: 'rgba(255,255,255,0.06)' }
+                }
+            }
+        }
+    });
+}
+
+// S&P 500 Trailing P/E 10Y Chart
+const sp5PeLabels = {{ sp500_fpe_chart_labels | safe }};
+const sp5PeData = {{ sp500_fpe_chart_data | safe }};
+const sp5PeAvg = {{ sp500_fpe_chart_avg | safe }};
+const sp5PeCanvas = document.getElementById('sp500PeChart');
+
+if (sp5PeCanvas && sp5PeLabels && sp5PeLabels.length > 0) {
+    const sp5PeCtx = sp5PeCanvas.getContext('2d');
+    new Chart(sp5PeCtx, {
+        type: 'line',
+        data: {
+            labels: sp5PeLabels,
+            datasets: [
+                {
+                    label: 'S&P 500 Trailing P/E',
+                    data: sp5PeData,
+                    borderColor: '#c9a84c',
+                    backgroundColor: 'rgba(201, 168, 76, 0.12)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
+                },
+                {
+                    label: '近10年平均線 (' + {{ sp500_fpe_avg_10y_str | tojson }} + ')',
+                    data: sp5PeAvg,
+                    borderColor: '#60a5fa',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    align: 'end',
+                    labels: {
+                        color: '#bbb',
+                        font: { size: 12 },
+                        boxWidth: 16,
+                        usePointStyle: false
+                    }
+                },
+                tooltip: {
+                    backgroundColor: '#1a1a1a',
+                    borderColor: '#2a2a2a',
+                    borderWidth: 1,
+                    titleColor: '#ffffff',
+                    bodyColor: '#c9a84c',
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += context.parsed.y.toFixed(2);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#8a8a8a', maxTicksLimit: 10 },
                     grid: { color: 'rgba(255,255,255,0.04)' }
                 },
                 y: {

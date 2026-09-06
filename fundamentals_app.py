@@ -22,13 +22,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pandas as pd
 import requests
 import yfinance as yf
 from bs4 import BeautifulSoup
-from flask import Flask, render_template, send_file, send_from_directory
+from flask import Flask, render_template, request, send_file, send_from_directory
 from pytz import timezone
+from research_data_sources import apply_reviewed_data, fetch_cashflow_fallback
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -47,6 +49,37 @@ except Exception as exc:  # pragma: no cover - defensive for yfinance version dr
     logging.warning("Unable to configure yfinance cache: %s", exc)
 
 app = Flask(__name__)
+
+
+@app.after_request
+def add_global_markets_navigation(response):
+    """Also update navigation in pre-generated portfolio HTML snapshots."""
+    if response.mimetype != "text/html" or response.status_code != 200:
+        return response
+    response.direct_passthrough = False
+    html = response.get_data(as_text=True)
+    if "global_markets.html" not in html:
+        html = re.sub(
+            r'(<a\b[^>]*href=["\'][^"\']*bottom_fishing(?:\.html)?["\'][^>]*>.*?</a>)',
+            r'\1<a href="global_markets.html">全球股市概況</a>',
+            html,
+            flags=re.DOTALL,
+        )
+        response.set_data(html)
+    return response
+
+
+@app.get("/global_markets.html")
+@app.get("/global_markets")
+def global_markets():
+    """Embed the complete Market Atlas app, including its own quote API."""
+    configured_url = os.environ.get("MARKET_ATLAS_URL", "").strip()
+    hostname = urlsplit(request.host_url).hostname or "localhost"
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    atlas_url = configured_url or f"http://{host}:3000/"
+    if urlsplit(atlas_url).scheme not in ("http", "https"):
+        return "MARKET_ATLAS_URL must be an HTTP or HTTPS URL", 500
+    return render_template("global_markets.html", atlas_url=atlas_url)
 
 
 FULL_PORTFOLIO = [
@@ -340,17 +373,11 @@ def _buyback_ttm(cashflow: pd.DataFrame) -> float | None:
 
 
 def _fundamental_label(roa: float | None, forward_pe: float | None) -> str:
-    if roa is None and forward_pe is None:
-        return "資料待補"
-    if roa is not None and roa >= 10 and forward_pe is not None and forward_pe <= 30:
-        return "品質與估值兼具"
-    if roa is not None and roa >= 10:
-        return "高 ROA・估值偏高"
-    if forward_pe is not None and forward_pe <= 20:
-        return "估值具吸引力"
     if roa is not None and roa < 0:
-        return "獲利品質待改善"
-    return "中性觀察"
+        return "ROA 為負"
+    if roa is None or forward_pe is None:
+        return "指標待補"
+    return "需搭配產業與成長假設"
 
 
 def _empty_snapshot(position: dict[str, Any], error: str | None = None) -> dict[str, Any]:
@@ -424,7 +451,7 @@ def fetch_stock_snapshot(
 
     buyback_program = (
         _fetch_buyback_program(sec_cik)
-        if buyback is not None and buyback > 0
+        if sec_cik is not None
         else {
             "authorized_amount": None,
             "expiry": "—",
@@ -463,6 +490,15 @@ def fetch_stock_snapshot(
             "forward_pe": forward_pe,
             "roa": roa,
             "roe": roe,
+            "forward_eps": _safe_float(info.get("forwardEps")),
+            "trailing_eps": _safe_float(info.get("trailingEps")),
+            "book_value": _safe_float(info.get("bookValue")),
+            "financial_currency": info.get("financialCurrency"),
+            "fcf_currency": info.get("financialCurrency"),
+            "revenue_growth": _safe_float(info.get("revenueGrowth")),
+            "profit_margin": _safe_float(info.get("profitMargins")),
+            "free_cashflow": _safe_float(info.get("freeCashflow")),
+            "company_market_cap": _positive_metric(info.get("marketCap")),
             "ath": ath,
             "ath_distance": min(ath_distance, 0.0) if ath_distance is not None else None,
             "buyback_ttm": buyback,
@@ -479,7 +515,16 @@ def fetch_stock_snapshot(
             "error": None,
         }
     )
-    return item
+    item["fundamental_period"] = (
+        datetime.fromtimestamp(info["mostRecentQuarter"], timezone("UTC")).strftime("%Y-%m-%d")
+        if info.get("mostRecentQuarter") else "來源未提供財報期末"
+    )
+    item["fetched_at"] = datetime.now(timezone("Asia/Taipei")).isoformat()
+    if item["free_cashflow"] is None or item.get("fcf_currency") != item["currency"]:
+        fallback = fetch_cashflow_fallback(position["symbol"])
+        if fallback:
+            item.update(fallback)
+    return apply_reviewed_data(item)
 
 
 def _load_cache() -> dict[str, dict[str, Any]]:
@@ -634,6 +679,51 @@ def build_dashboard_data(max_workers: int = 4) -> dict[str, Any]:
     }
 
 
+def prepare_research_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Enrich live and legacy snapshots without inventing unavailable history."""
+    items = []
+    for original in data.get("items", []):
+        item = apply_reviewed_data(original)
+        for field in ("price", "trailing_pe", "forward_pe", "roa", "roe",
+                      "forward_eps", "revenue_growth", "profit_margin",
+                      "free_cashflow", "company_market_cap"):
+            item[field] = _safe_float(item.get(field))
+        price, forward = item["price"], _positive_metric(item["forward_pe"])
+        eps = item["forward_eps"]
+        item["eps_source"] = "Yahoo Finance forwardEps（預估期間依來源定義）"
+        if eps is None and price and forward:
+            eps = price / forward
+            item["eps_source"] = "現價 ÷ Forward P/E 推算；非獨立 EPS 預測"
+        item["scenario_eps"] = eps if eps is not None and eps > 0 else None
+        trailing = _positive_metric(item["trailing_pe"])
+        item["implied_eps_change"] = (trailing / forward - 1) * 100 if trailing and forward else None
+        cap = _positive_metric(item.get("fcf_market_cap") or item["company_market_cap"])
+        currency_matches = item.get("fcf_currency", item.get("currency")) == item.get("currency")
+        item["fcf_yield"] = item["free_cashflow"] / cap * 100 if item["free_cashflow"] is not None and cap and currency_matches else None
+        notes = []
+        if item.get("data_status") == "cached":
+            notes.append("使用快取資料，請先核對資料日期")
+        if item.get("reviewed_data_stale"):
+            notes.append("回購人工核對資料需更新；下方僅列歷史披露，不代表現行額度")
+        for status in item.get("metric_status", {}).values():
+            if status not in notes:
+                notes.append(status)
+        if item["scenario_eps"] is None:
+            notes.append("缺少正值預估 EPS；請自行輸入假設或改用其他估值方法")
+        if item["roa"] is not None and item["roa"] < 0:
+            notes.append("ROA 為負，需檢查虧損原因與盈餘恢復假設")
+        change = item["implied_eps_change"]
+        if change is not None and abs(change) >= 30:
+            notes.append("兩種 P/E 隱含 EPS 差異達 30%：核對期間、一次性損益與預估假設")
+        missing = [label for key, label in (("roa", "ROA"), ("roe", "ROE"), ("fcf_yield", "FCF 殖利率")) if item[key] is None and key not in item.get("metric_status", {})]
+        if missing:
+            notes.append("待補資料：" + "、".join(missing))
+        item["research_notes"] = notes
+        item["label"] = _fundamental_label(item["roa"], forward)
+        items.append(item)
+    return {**data, "items": items}
+
+
 def render_dashboard(
     data: dict[str, Any] | None = None,
     asset_prefix: str = "/static",
@@ -641,7 +731,7 @@ def render_dashboard(
 ) -> str:
     return render_template(
         "fundamentals.html",
-        dashboard=data or build_dashboard_data(),
+        dashboard=prepare_research_data(data if data is not None else build_dashboard_data()),
         asset_prefix=asset_prefix,
         og_image_url=og_image_url
         or f"{os.environ.get('SITE_URL', 'https://huangchink.github.io/portfolio').rstrip('/')}/{asset_prefix.lstrip('/')}/og.png",
@@ -704,14 +794,43 @@ def write_static_site(output_path: Path, data: dict[str, Any] | None = None) -> 
         )
     asset_dir = output_path.parent / "assets"
     asset_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("dashboard.css", "dashboard.js", "og.png"):
+    for name in ("dashboard.css", "dashboard.js", "research.css", "research.js", "og.png"):
         shutil.copy2(PROJECT_ROOT / "static" / name, asset_dir / name)
+    with app.app_context():
+        output_path.parent.joinpath("global_markets.html").write_text(
+            render_template(
+                "global_markets.html",
+                atlas_url=os.environ.get(
+                    "MARKET_ATLAS_URL",
+                    "https://market-atlas-tw.stu1010614.chatgpt.site/",
+                ),
+            ),
+            encoding="utf-8",
+        )
     print(f"Wrote fundamentals dashboard to {output_path}")
 
 
 def write_sites_dist(max_workers: int = 4) -> None:
+    # Keep the shared navigation consistent: index is the portfolio overview.
+    for name in ("index.html", "bottom_fishing.html"):
+        if not (PROJECT_ROOT / "docs" / name).is_file():
+            raise FileNotFoundError(f"Generate docs/{name} before building the Sites bundle")
     data = build_dashboard_data(max_workers=max_workers)
-    write_static_site(PROJECT_ROOT / "dist" / "client" / "index.html", data=data)
+    client_dir = PROJECT_ROOT / "dist" / "client"
+    write_static_site(client_dir / "fundamentals.html", data=data)
+    with app.app_context():
+        (client_dir / "global_markets.html").write_text(
+            render_template(
+                "global_markets.html",
+                atlas_url=os.environ.get(
+                    "MARKET_ATLAS_URL",
+                    "https://market-atlas-tw.stu1010614.chatgpt.site/",
+                ),
+            ),
+            encoding="utf-8",
+        )
+    for name in ("index.html", "bottom_fishing.html"):
+        shutil.copy2(PROJECT_ROOT / "docs" / name, client_dir / name)
     server_dir = PROJECT_ROOT / "dist" / "server"
     server_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(PROJECT_ROOT / "worker" / "index.js", server_dir / "index.js")

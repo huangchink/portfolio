@@ -50,6 +50,21 @@ class FundamentalCalculationsTest(unittest.TestCase):
                 self.assertIn(b"Bottom Fishing Plan", response.data)
                 response.close()
 
+    def test_global_markets_page_embeds_market_atlas(self):
+        response = dashboard.app.test_client().get("/global_markets.html")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("全球股市概況".encode("utf-8"), response.data)
+        self.assertIn(b"iframe", response.data)
+        self.assertIn(b"localhost:3000", response.data)
+        response.close()
+
+    def test_bottom_fishing_snapshot_contains_sp500_pe_10y_chart(self):
+        snapshot_file = Path("docs/bottom_fishing.html")
+        if snapshot_file.exists():
+            content = snapshot_file.read_text(encoding="utf-8")
+            self.assertIn("sp500PeChart", content)
+            self.assertIn("10年平均線", content)
+
     def test_assets_route_serves_css(self):
         response = dashboard.app.test_client().get("/assets/dashboard.css")
         self.assertEqual(response.status_code, 200)
@@ -136,17 +151,19 @@ class FundamentalCalculationsTest(unittest.TestCase):
         for text in (
             "Forward P/E",
             "ROA",
-            "持倉總 ROI",
+            "情境估值實驗室",
             "股票回購",
-            "距ATH",
-            "前十大持股",
-            "holdingsDonutCanvas",
+            "持倉研究比較",
+            "研究待辦",
+            "scenarioChart",
             "最新授權規模",
             "近四季實際執行",
             "計畫期限",
         ):
             self.assertIn(text, html)
         self.assertIn("TEST", html)
+        self.assertNotIn("holdingsDonutCanvas", html)
+        self.assertNotIn("持倉總 ROI", html)
 
     def test_static_writer_copies_assets(self):
         fixture = {
@@ -174,7 +191,12 @@ class FundamentalCalculationsTest(unittest.TestCase):
             self.assertTrue(target.exists())
             self.assertTrue((target.parent / "assets" / "dashboard.css").exists())
             self.assertTrue((target.parent / "assets" / "dashboard.js").exists())
+            self.assertTrue((target.parent / "assets" / "research.js").exists())
+            self.assertTrue((target.parent / "assets" / "research.css").exists())
             self.assertTrue((target.parent / "assets" / "og.png").exists())
+            global_markets = target.parent / "global_markets.html"
+            self.assertTrue(global_markets.exists())
+            self.assertIn("market-atlas-tw.stu1010614.chatgpt.site", global_markets.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
