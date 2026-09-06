@@ -1,0 +1,499 @@
+{
+  "reviewed_at": "2026-09-06",
+  "companies": {
+    "AAPL": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000020/aapl-20260627.htm",
+        "filed": "2026-07-31",
+        "period": "2026-06-27",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "新增 US$1000 億",
+        "expiry": "文件未載明固定期限",
+        "note": "2026-04-30 新增授權；截至 2026-06-27，2025 年計畫尚餘 US$380 億。"
+      }
+    },
+    "AEP": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/4904/000000490426000059/aep-20260630.htm",
+        "filed": "2026-07-30",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "本期未列公開回購額度",
+        "expiry": "未列公開計畫期限",
+        "note": "2026 Q2 10-Q 的 Item 2 列為 None；不把未披露當成零額度。"
+      }
+    },
+    "AMZN": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1018724/000101872426000026/amzn-20260630.htm",
+        "filed": "2026-07-31",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "US$100 億（2022 年授權）",
+        "expiry": "無固定期限",
+        "note": "截至 2026-06-30 尚餘 US$61 億；2026 上半年未執行回購。"
+      }
+    },
+    "AXP": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/4962/000000496226000322/axp-20260630.htm",
+        "filed": "2026-07-24",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "1.2 億股（2023 年授權）",
+        "expiry": "本期文件未載明期限",
+        "note": "按股數授權，不能當成美元額度；截至 2026-06-30 尚餘 45,906,456 股。"
+      }
+    },
+    "CDNS": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/813672/000081367226000092/cdns-20260630.htm",
+        "filed": "2026-07-29",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "新增 US$15 億",
+        "expiry": "無固定期限",
+        "note": "2025-05-08 增加授權；截至 2026-06-30 尚餘約 US$10 億。"
+      }
+    },
+    "CEG": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1868275/000186827526000104/ceg-20260630.htm",
+        "filed": "2026-08-06",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "新增 US$44 億",
+        "expiry": "本期文件未載明期限",
+        "note": "2026 年在原剩餘 US$6 億上增加 US$44 億；申報日尚餘約 US$28 億。"
+      }
+    },
+    "CVX": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/93410/000009341026000167/cvx-20260630.htm",
+        "filed": "2026-08-06",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "US$750 億",
+        "expiry": "無固定期限",
+        "note": "核對 2026 Q2 10-Q 的授權計畫；執行金額與授權額分開列示。"
+      }
+    },
+    "DIS": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1744489/000174448926000057/dis-20260627.htm",
+        "filed": "2026-08-05",
+        "period": "2026-06-27",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "4 億股（2024 年授權）",
+        "expiry": "無固定期限",
+        "note": "2024-02-07 授權；截至 2026-06-27 尚餘約 2.71 億股。"
+      }
+    },
+    "DUK": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1326160/000132616026000040/duk-20260630.htm",
+        "filed": "2026-08-04",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "本期未列公開回購額度",
+        "expiry": "未列公開計畫期限",
+        "note": "2026 Q2 10-Q 的 Item 2 列為 None；債券贖回不列入股票回購。"
+      }
+    },
+    "GOOGL": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1652044/000165204426000071/goog-20260630.htm",
+        "filed": "2026-07-23",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "US$700 億",
+        "expiry": "?????",
+        "note": "2025 ? 4 ?????? 2026-06-30 ?? US$695 ??2026 ?????????"
+      }
+    },
+    "HUBB": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/48898/000162828026050405/hubb-20260630.htm",
+        "filed": "2026-07-29",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "US$5 億（2025 年計畫）",
+        "expiry": "2028 年 2 月",
+        "note": "2025-02-12 授權；截至 2026-06-30 尚餘 US$2.982 億。"
+      }
+    },
+    "HIMX": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1342338/000110465926035507/himx-20251231x20f.htm",
+        "filed": "2026-03-27",
+        "period": "2025-12-31",
+        "form": "20-F"
+      },
+      "buyback": {
+        "authorization": "US$2000 萬（ADS）",
+        "expiry": "年度文件未載明期限",
+        "note": "2024-12-04 授權；2025 年報披露截至 2026-02-28 已執行約 US$530 萬。"
+      }
+    },
+    "INTC": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/50863/000005086326000157/intc-20260627.htm",
+        "filed": "2026-07-24",
+        "period": "2026-06-27",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "累計 US$1100 億",
+        "expiry": "本期文件未載明期限",
+        "note": "截至 2026-06-27 尚餘 US$72 億；本季未買回。授權存在不代表正在執行。"
+      }
+    },
+    "JNJ": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/200406/000020040626000153/jnj-20260628.htm",
+        "filed": "2026-07-23",
+        "period": "2026-06-28",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "本期未列公開計畫額度",
+        "expiry": "未列公開計畫期限",
+        "note": "2026 Q2 公開計畫欄位列空；當季 970,250 股係為員工薪酬計畫買回，不能推算出公開授權規模。"
+      }
+    },
+    "KO": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/21344/000162828026050503/ko-20260703.htm",
+        "filed": "2026-07-29",
+        "period": "2026-07-03",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "1.5 億股（2019 年計畫）",
+        "expiry": "本期文件未載明期限",
+        "note": "2026 Q2 10-Q 持續引用 2019 年授權；按股數列示，不換算為當期美元額度。"
+      }
+    },
+    "LEU": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1065059/000162828026053863/leu-20260630.htm",
+        "filed": "2026-08-06",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "本期未查得股票回購授權",
+        "expiry": "未查得計畫期限",
+        "note": "核對 2026 Q2 10-Q；文件中的 repurchase 多指可轉債，不能當成股票買回計畫。"
+      }
+    },
+    "LULU": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1397187/000139718726000127/lulu-20260802.htm",
+        "filed": "2026-09-03",
+        "period": "2026-08-02",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "累計 US$40 億",
+        "expiry": "無固定期限",
+        "note": "2023 年起始 US$10 億，2024 年兩次及 2025-12-03 各增加 US$10 億。"
+      }
+    },
+    "MCD": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/63908/000006390826000073/mcd-20260630.htm",
+        "filed": "2026-08-07",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "US$150 億",
+        "expiry": "無固定期限",
+        "note": "計畫自 2025-01-01 生效；2026 Q2 10-Q 明確載明無指定到期日。"
+      }
+    },
+    "META": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1326801/000162828026050705/meta-20260630.htm",
+        "filed": "2026-07-30",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "剩餘 US$250.3 億",
+        "expiry": "無固定期限",
+        "note": "此數字是截至 2026-06-30 的剩餘可用額度，並非新增授權。2026 上半年未執行回購。"
+      }
+    },
+    "MSFT": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/789019/000119312526323660/msft-20260630.htm",
+        "filed": "2026-07-29",
+        "period": "2026-06-30",
+        "form": "10-K"
+      },
+      "buyback": {
+        "authorization": "US$600 億（2024 年授權）",
+        "expiry": "無固定期限",
+        "note": "計畫於 2025 年 4 月開始；截至 2026-06-30 尚餘 US$406 億。"
+      }
+    },
+    "MU": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/723125/000072312526000015/mu-20260528.htm",
+        "filed": "2026-06-25",
+        "period": "2026-05-28",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "US$100 億",
+        "expiry": "無固定期限",
+        "note": "截至 2026-05-28 累計執行 US$78.4 億；US$21.6 億是剩餘額度，不是原始授權。"
+      }
+    },
+    "NVDA": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000075/nvda-20260726.htm",
+        "filed": "2026-08-26",
+        "period": "2026-07-26",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "新增 US$800 億",
+        "expiry": "無固定期限",
+        "note": "2026-05-18 新增授權；截至 2026-07-26 可用額度合計 US$993 億。"
+      }
+    },
+    "NFLX": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1065280/000106528026000212/nflx-20260630.htm",
+        "filed": "2026-07-17",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "新增 US$250 億",
+        "expiry": "無固定期限",
+        "note": "2026 年 4 月增加授權，沿用 2021 年開始的回購計畫。"
+      }
+    },
+    "PEP": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/77476/000007747626000035/pep-20260613.htm",
+        "filed": "2026-07-09",
+        "period": "2026-06-13",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "US$100 億",
+        "expiry": "2030-02-28",
+        "note": "依 2026 Q2 10-Q 的股票回購計畫；不是剩餘額度。"
+      }
+    },
+    "QCOM": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/804328/000080432826000086/qcom-20260628.htm",
+        "filed": "2026-07-29",
+        "period": "2026-06-28",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "新增 US$200 億",
+        "expiry": "無固定期限",
+        "note": "2026-03-17 新增授權；截至 2026-06-28 合計尚餘 US$206 億。"
+      }
+    },
+    "SIMO": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1329394/000119312526197184/d17718d20f.htm",
+        "filed": "2026-04-30",
+        "period": "2025-12-31",
+        "form": "20-F"
+      },
+      "buyback": {
+        "authorization": "US$5000 萬（歷史 ADS 計畫）",
+        "expiry": "2025 年 8 月已結束",
+        "note": "2025-02-06 授權六個月；2025 年報確認計畫於 2025 年 8 月結束，非現行授權。"
+      }
+    },
+    "SNDK": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/2023554/000162828026057406/sndk-20260703.htm",
+        "filed": "2026-08-17",
+        "period": "2026-07-03",
+        "form": "10-K"
+      },
+      "buyback": {
+        "authorization": "新增 US$140 億",
+        "expiry": "無固定期限",
+        "note": "2026 年 4 月原授權 US$60 億，8 月另新增 US$140 億；年度已執行 US$45 億。",
+        "actual": 4500000000,
+        "actual_currency": "USD",
+        "actual_label": "2026 財年實際執行",
+        "actual_period": "2025-06-28 至 2026-07-03"
+      }
+    },
+    "SNPS": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/883241/000088324126000025/snps-20260731.htm",
+        "filed": "2026-08-26",
+        "period": "2026-07-31",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "US$20 億（2026 年補充授權）",
+        "expiry": "本期文件未載明期限",
+        "note": "2026 年 2 月補充計畫；截至 2026-07-31 尚餘 US$17 億。"
+      }
+    },
+    "TSLA": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1318605/000162828026049270/tsla-20260630.htm",
+        "filed": "2026-07-23",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "本期未列公開回購額度",
+        "expiry": "未列公開計畫期限",
+        "note": "2026 Q2 10-Q 的 Item 2 列為 None；未查得公開股票回購額度。"
+      }
+    },
+    "TSM": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1046179/000162828026025362/tsm-20251231.htm",
+        "filed": "2026-04-16",
+        "period": "2025-12-31",
+        "form": "20-F"
+      },
+      "buyback": {
+        "authorization": "320 萬普通股（歷史計畫）",
+        "expiry": "2024 年第二季已完成",
+        "note": "2025 年報列示 2024-06-05 授權的計畫已完成，股份於 2024 年 9 月註銷；非美股 ADS 數量。"
+      }
+    },
+    "TPR": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1116132/000111613226000018/tpr-20260627.htm",
+        "filed": "2026-08-13",
+        "period": "2026-06-27",
+        "form": "10-K"
+      },
+      "buyback": {
+        "authorization": "US$30 億（2026 財年計畫）",
+        "expiry": "年度文件未載明期限",
+        "note": "2025-09-10 授權並取代 2022 計畫；截至 2026-06-27 尚餘 US$18.9 億。舊 US$20 億是另一計畫。"
+      }
+    },
+    "UNH": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/731766/000073176626000197/unh-20260630.htm",
+        "filed": "2026-08-10",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "新增 3500 萬股（2024 年）",
+        "expiry": "無固定期限",
+        "note": "在舊計畫剩餘股數上增加授權；截至 2026-06-30 尚餘 1060 萬股。"
+      }
+    },
+    "V": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1403161/000140316126000104/v-20260630.htm",
+        "filed": "2026-07-29",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "新增 US$200 億",
+        "expiry": "無固定期限",
+        "note": "2026 年 4 月新增授權；截至 2026-06-30 所有計畫合計尚餘 US$284 億。"
+      }
+    },
+    "VST": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1692819/000169281926000019/vistra-20260630.htm",
+        "filed": "2026-08-10",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "累計 US$77.5 億",
+        "expiry": "預計 2027 年底完成（非硬性到期日）",
+        "note": "授權由 2021 年起分次增加；截至 2026-06-30 尚餘約 US$12.9 億。"
+      }
+    },
+    "YUM": {
+      "reviewed_at": "2026-09-06",
+      "source": {
+        "url": "https://www.sec.gov/Archives/edgar/data/1041061/000104106126000160/yum-20260630.htm",
+        "filed": "2026-08-05",
+        "period": "2026-06-30",
+        "form": "10-Q"
+      },
+      "buyback": {
+        "authorization": "新增 US$40 億",
+        "expiry": "2028-06-30",
+        "note": "2026 年 6 月授權；待 2024 計畫用罄或到期後開始。舊計畫到期日為 2026-12-31。"
+      }
+    }
+  }
+}

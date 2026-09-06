@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>全球股市概況｜Fundamentals Desk</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #050d16; color: #e6eff0; font-family: system-ui, "Microsoft JhengHei", sans-serif; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #28404c; }
+    nav { display: flex; flex-wrap: wrap; gap: 8px; }
+    a { color: #b1c5cd; text-decoration: none; padding: 9px 12px; border-radius: 7px; font-size: 14px; }
+    a:hover, a[aria-current] { color: #9aebdd; background: #183b42; }
+    .shell { height: 100dvh; display: flex; flex-direction: column; }
+    iframe { display: block; width: 100%; flex: 1; min-height: 0; border: 0; background: #050d16; }
+    @media (max-width: 650px) { header { flex-wrap: wrap; padding: 8px; } a { padding: 8px; font-size: 12px; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <nav aria-label="頁面導覽">
+        <a href="index.html">持倉追蹤總覽</a>
+        <a href="fundamentals.html">持倉估值分析</a>
+        <a href="bottom_fishing.html">抄底計畫</a>
+        <a href="global_markets.html" aria-current="page">全球股市概況</a>
+      </nav>
+      <a href="{{ atlas_url }}" target="_blank" rel="noopener">另開完整地圖 ↗</a>
+    </header>
+    <iframe src="{{ atlas_url }}" title="全球股市互動地圖、各國指數、ETF 與市值前三大股票" allow="fullscreen"></iframe>
+  </div>
+</body>
+</html>
