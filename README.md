@@ -17,7 +17,9 @@ pip install -r requirements.txt
 python fundamentals_app.py --serve
 ```
 
-開啟 <http://127.0.0.1:5000/>。
+開啟 <http://127.0.0.1:5000/>，預設顯示持倉追蹤總覽；估值分析位於 <http://127.0.0.1:5000/fundamentals.html>。
+
+持倉總覽位於 <http://127.0.0.1:5000/index.html>。本機 Flask 頁面在載入時查詢資料並重新產生畫面，不會直接顯示 `docs/` 的舊快照。持倉總覽的價格快取為 60 秒；首次載入需等待外部查詢，行情仍受來源更新時間影響，查詢失敗時可能沿用快取。GitHub Pages 仍顯示排程產生的靜態快照。
 
 ## 產生靜態網站
 

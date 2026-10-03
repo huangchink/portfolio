@@ -9,46 +9,40 @@ import fundamentals_app as dashboard
 
 
 class FundamentalCalculationsTest(unittest.TestCase):
-    def test_overview_navigation_serves_snapshot_without_fetching_quotes(self):
+    def test_local_routes_refresh_data_even_when_old_snapshots_exist(self):
+        import portfolio
+
+        cases = (
+            (dashboard.app, "/", portfolio, "render_portfolio_html"),
+            (dashboard.app, "/fundamentals.html", dashboard, "render_dashboard"),
+            (dashboard.app, "/index.html", portfolio, "render_portfolio_html"),
+            (dashboard.app, "/bottom_fishing.html", portfolio, "render_bottom_fishing_html"),
+            (dashboard.app, "/bottom_fishing", portfolio, "render_bottom_fishing_html"),
+            (portfolio.app, "/", portfolio, "render_portfolio_html"),
+            (portfolio.app, "/index.html", portfolio, "render_portfolio_html"),
+            (portfolio.app, "/bottom_fishing.html", portfolio, "render_bottom_fishing_html"),
+            (portfolio.app, "/bottom_fishing", portfolio, "render_bottom_fishing_html"),
+        )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "docs").mkdir()
-            (root / "docs" / "index.html").write_text(
-                "<!doctype html><title>Portfolio overview</title>", encoding="utf-8"
-            )
+            for name in ("index", "fundamentals", "bottom_fishing"):
+                (root / "docs" / f"{name}.html").write_text(
+                    "<html>outdated snapshot</html>", encoding="utf-8"
+                )
             with patch.object(dashboard, "PROJECT_ROOT", root), patch.object(
-                dashboard, "build_dashboard_data", side_effect=AssertionError("Unexpected fetch")
+                portfolio, "__file__", str(root / "portfolio.py")
             ):
-                response = dashboard.app.test_client().get("/index.html")
-                self.assertEqual(response.status_code, 200)
-                self.assertIn(b"Portfolio overview", response.data)
-                response.close()
-
-    def test_fundamentals_navigation_returns_to_dashboard(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "docs").mkdir()
-            (root / "docs" / "fundamentals.html").write_text(
-                "<!doctype html><title>Fundamentals dashboard</title>", encoding="utf-8"
-            )
-            with patch.object(dashboard, "PROJECT_ROOT", root):
-                response = dashboard.app.test_client().get("/fundamentals.html")
-                self.assertEqual(response.status_code, 200)
-                self.assertIn(b"Fundamentals dashboard", response.data)
-                response.close()
-
-    def test_bottom_fishing_navigation_serves_snapshot(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "docs").mkdir()
-            (root / "docs" / "bottom_fishing.html").write_text(
-                "<!doctype html><title>Bottom Fishing Plan</title>", encoding="utf-8"
-            )
-            with patch.object(dashboard, "PROJECT_ROOT", root):
-                response = dashboard.app.test_client().get("/bottom_fishing.html")
-                self.assertEqual(response.status_code, 200)
-                self.assertIn(b"Bottom Fishing Plan", response.data)
-                response.close()
+                for app, route, module, renderer in cases:
+                    with self.subTest(app=app.name, route=route), patch.object(
+                        module, renderer, return_value="<html>updated quote</html>"
+                    ) as render:
+                        response = app.test_client().get(route)
+                        self.assertEqual(response.status_code, 200)
+                        self.assertIn(b"updated quote", response.data)
+                        self.assertNotIn(b"outdated snapshot", response.data)
+                        render.assert_called_once_with()
+                        response.close()
 
     def test_global_markets_page_embeds_market_atlas(self):
         response = dashboard.app.test_client().get("/global_markets.html")

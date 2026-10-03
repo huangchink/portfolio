@@ -28,7 +28,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 from bs4 import BeautifulSoup
-from flask import Flask, render_template, request, send_file, send_from_directory
+from flask import Flask, render_template, request, send_from_directory
 from pytz import timezone
 from research_data_sources import apply_reviewed_data, fetch_cashflow_fallback
 
@@ -738,22 +738,15 @@ def render_dashboard(
     )
 
 
-@app.get("/")
 @app.get("/fundamentals.html")
 def index():
-    snapshot = PROJECT_ROOT / "docs" / "fundamentals.html"
-    if snapshot.is_file():
-        return send_file(snapshot, mimetype="text/html")
     return render_dashboard()
 
 
+@app.get("/")
 @app.get("/index.html")
 def portfolio_overview():
-    """Serve the overview linked from the fundamentals navigation."""
-    snapshot = PROJECT_ROOT / "docs" / "index.html"
-    if snapshot.is_file():
-        return send_file(snapshot, mimetype="text/html")
-    # A fresh checkout may not have a generated snapshot yet.
+    """Render the overview using current data instead of an exported snapshot."""
     from portfolio import render_portfolio_html
 
     return render_portfolio_html()
@@ -762,10 +755,7 @@ def portfolio_overview():
 @app.get("/bottom_fishing.html")
 @app.get("/bottom_fishing")
 def bottom_fishing():
-    """Serve the bottom-fishing strategy linked from navigation."""
-    snapshot = PROJECT_ROOT / "docs" / "bottom_fishing.html"
-    if snapshot.is_file():
-        return send_file(snapshot, mimetype="text/html")
+    """Render the strategy using current data instead of an exported snapshot."""
     from portfolio import render_bottom_fishing_html
 
     return render_bottom_fishing_html()

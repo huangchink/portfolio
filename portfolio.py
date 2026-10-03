@@ -8,7 +8,7 @@ Usage:
 Local preview: http://127.0.0.1:5000/
 """
 
-from flask import Flask, render_template_string, send_file
+from flask import Flask, render_template_string
 import re
 import html as html_lib
 from datetime import datetime, timedelta
@@ -48,7 +48,6 @@ FULL_PORTFOLIO = [
     {"symbol": "CEG",   "shares": 28,        "cost": 290.96},
     # {"symbol": "COST",   "shares": 3,        "cost": 950},
 
-    {"symbol": "CVX",   "shares": 3,        "cost": 196.3266},
      {"symbol": "DIS",   "shares": 5,        "cost": 98.282},
    
     {"symbol": "DUK",   "shares": 16,        "cost": 115.79375},
@@ -66,7 +65,6 @@ FULL_PORTFOLIO = [
    
     {"symbol": "KO",    "shares": 206.47431, "cost": 76.722},
     {"symbol": "LEU",   "shares": 8,        "cost": 165.216},
-    {"symbol": "LULU",   "shares": 2,        "cost": 108.735},
 
 
     {"symbol": "MCD",   "shares": 25,        "cost": 270.79},
@@ -78,19 +76,17 @@ FULL_PORTFOLIO = [
 
     {"symbol": "PEP",  "shares": 5,         "cost": 136.218},
 
-    {"symbol": "QCOM",  "shares": 1,         "cost": 208.67},
     {"symbol": "SIMO",  "shares": 4,         "cost": 252.7225},
     {"symbol": "SNDK",  "shares": 5,         "cost": 1335.1},
-    {"symbol": "SNPS",  "shares": 13,        "cost": 467.177},
+    {"symbol": "SNPS",  "shares": 14,        "cost": 460.177},
     {"symbol": "TSLA",  "shares": 2,         "cost": 420},
-    {"symbol": "TSM",   "shares": 75,        "cost": 415.82},
-    {"symbol": "TPR",   "shares": 1,        "cost": 127.7},
+    {"symbol": "TSM",   "shares": 87,        "cost": 416.91},
 
     {"symbol": "UNH",   "shares": 15,        "cost": 310.86},
     {"symbol": "V",     "shares": 5,         "cost": 310.006},
-    {"symbol": "VST",   "shares": 11,        "cost": 146.69},
+    {"symbol": "VST",   "shares": 11,        "cost": 143.347},
 
-    {"symbol": "YUM",   "shares": 2,         "cost": 144.73},
+    {"symbol": "YUM",   "shares": 3,         "cost": 144.86},
 ]
 
 WATCHLIST = [
@@ -3658,17 +3654,11 @@ if (sp5PeCanvas && sp5PeLabels && sp5PeLabels.length > 0) {
 @app.route("/")
 @app.route("/index.html")
 def watchlist_only():
-    snapshot = Path(__file__).resolve().parent / "docs" / "index.html"
-    if snapshot.is_file():
-        return send_file(snapshot, mimetype="text/html")
     return render_portfolio_html()
 
 @app.route("/bottom_fishing.html")
 @app.route("/bottom_fishing")
 def bottom_fishing_route():
-    snapshot = Path(__file__).resolve().parent / "docs" / "bottom_fishing.html"
-    if snapshot.is_file():
-        return send_file(snapshot, mimetype="text/html")
     return render_bottom_fishing_html()
 
 @app.get("/health")
